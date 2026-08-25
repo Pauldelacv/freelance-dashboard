@@ -18,6 +18,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Une Server Action ne sait pas lire une redirection HTTP : le client reçoit
+  // du HTML à la place de sa réponse et lève « An unexpected response was
+  // received from the server. » On laisse donc passer, et c'est `requireSession()`
+  // en tête de chaque action qui redirige — proprement, via le protocole de Next.
+  if (isServerAction(request)) return NextResponse.next();
+
   if (!authenticated) {
     const loginUrl = new URL("/login", request.url);
     if (pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${search}`);
@@ -25,6 +31,11 @@ export async function middleware(request: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+/** Appel de Server Action : POST portant l'identifiant de l'action. */
+function isServerAction(request: NextRequest): boolean {
+  return request.method === "POST" && request.headers.has("next-action");
 }
 
 export const config = {

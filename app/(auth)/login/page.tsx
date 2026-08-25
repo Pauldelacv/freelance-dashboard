@@ -13,7 +13,7 @@ export default async function LoginPage({
 }) {
   const { next } = await searchParams;
   const missing: string[] = [];
-  if (!isPasswordConfigured()) missing.push("APP_PASSWORD_HASH");
+  if (!(await isPasswordConfigured())) missing.push("APP_PASSWORD_HASH");
   if (!isSecretConfigured()) missing.push("SESSION_SECRET");
 
   return (

@@ -1,17 +1,32 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { verify } from "@node-rs/argon2";
+import { hash, verify } from "@node-rs/argon2";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   createSessionToken,
-  verifySessionToken,
+  isSecureConnection,
+  readSessionToken,
 } from "@/lib/session";
+import { readStoredCredentials, writeStoredPassword } from "@/lib/credentials";
 
-/** Le mot de passe unique est fourni hashé par variable d'environnement. */
-export function isPasswordConfigured(): boolean {
-  const hash = process.env.APP_PASSWORD_HASH;
-  return typeof hash === "string" && hash.startsWith("$argon2");
+function envPasswordHash(): string | null {
+  const hashFromEnv = process.env.APP_PASSWORD_HASH;
+  return typeof hashFromEnv === "string" && hashFromEnv.startsWith("$argon2") ? hashFromEnv : null;
+}
+
+/**
+ * Hash à opposer à une saisie : celui enregistré depuis les réglages s'il
+ * existe, sinon celui d'amorçage fourni par variable d'environnement.
+ */
+async function getPasswordHash(): Promise<string | null> {
+  const stored = await readStoredCredentials();
+  return stored?.passwordHash ?? envPasswordHash();
+}
+
+/** Un mot de passe est-il utilisable (variable d'environnement ou réglages) ? */
+export async function isPasswordConfigured(): Promise<boolean> {
+  return (await getPasswordHash()) !== null;
 }
 
 export function isSecretConfigured(): boolean {
@@ -29,8 +44,28 @@ export function loginLockRemainingMs(now = Date.now()): number {
   return Math.max(0, attempts.lockedUntil - now);
 }
 
+/**
+ * Pose le cookie de session.
+ *
+ * `secure` suit le protocole réel de la requête et non NODE_ENV : sur un
+ * déploiement encore servi en http:// (adresse IP, domaine pas encore posé),
+ * un cookie Secure serait ignoré par le navigateur et le mot de passe
+ * redemandé à chaque page.
+ */
+async function setSessionCookie(now = Date.now()): Promise<void> {
+  const [store, headerList] = await Promise.all([cookies(), headers()]);
+  store.set(SESSION_COOKIE, await createSessionToken(now), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isSecureConnection((name) => headerList.get(name)),
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
 export async function signIn(password: string): Promise<{ ok: boolean; error?: string }> {
-  if (!isPasswordConfigured()) {
+  const passwordHash = await getPasswordHash();
+  if (!passwordHash) {
     return { ok: false, error: "Aucun mot de passe n'est configuré sur ce serveur." };
   }
   const remaining = loginLockRemainingMs();
@@ -43,7 +78,7 @@ export async function signIn(password: string): Promise<{ ok: boolean; error?: s
 
   let valid = false;
   try {
-    valid = await verify(process.env.APP_PASSWORD_HASH as string, password);
+    valid = await verify(passwordHash, password);
   } catch {
     return { ok: false, error: "Le hash du mot de passe est illisible (APP_PASSWORD_HASH)." };
   }
@@ -60,14 +95,7 @@ export async function signIn(password: string): Promise<{ ok: boolean; error?: s
   attempts.count = 0;
   attempts.lockedUntil = 0;
 
-  const store = await cookies();
-  store.set(SESSION_COOKIE, await createSessionToken(), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
+  await setSessionCookie();
   return { ok: true };
 }
 
@@ -76,9 +104,49 @@ export async function signOut(): Promise<void> {
   store.delete(SESSION_COOKIE);
 }
 
+/**
+ * Change le mot de passe et invalide les autres sessions.
+ *
+ * Le middleware ne vérifie que la signature du jeton (il n'a pas accès à la
+ * base) : la révocation est appliquée ici, à chaque page et à chaque Server
+ * Action, en comparant la date d'émission du jeton à celle du changement.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean; error?: string; field?: string }> {
+  const passwordHash = await getPasswordHash();
+  if (!passwordHash) {
+    return { ok: false, error: "Aucun mot de passe n'est configuré sur ce serveur." };
+  }
+
+  let valid = false;
+  try {
+    valid = await verify(passwordHash, currentPassword);
+  } catch {
+    return { ok: false, error: "Le hash du mot de passe est illisible (APP_PASSWORD_HASH)." };
+  }
+  if (!valid) {
+    return { ok: false, error: "Mot de passe actuel incorrect.", field: "currentPassword" };
+  }
+
+  await writeStoredPassword(await hash(newPassword));
+  // La session courante est renouvelée juste après, sinon le changement
+  // déconnecterait aussi le navigateur qui vient de le demander.
+  await setSessionCookie();
+  return { ok: true };
+}
+
 export async function isAuthenticated(): Promise<boolean> {
   const store = await cookies();
-  return verifySessionToken(store.get(SESSION_COOKIE)?.value);
+  const claims = await readSessionToken(store.get(SESSION_COOKIE)?.value);
+  if (!claims) return false;
+
+  // Session émise avant le dernier changement de mot de passe : révoquée.
+  const stored = await readStoredCredentials();
+  if (stored && claims.iat < stored.changedAt) return false;
+
+  return true;
 }
 
 /** À appeler en tête de toute page ou Server Action du groupe (app). */

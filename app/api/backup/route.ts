@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { AUTH_SETTING_KEY } from "@/lib/credentials";
 import { isAuthenticated } from "@/lib/auth";
 import { todayIso } from "@/lib/dates";
 
@@ -24,7 +25,8 @@ export async function GET() {
       prisma.expense.findMany(),
       prisma.watchSite.findMany(),
       prisma.goal.findMany(),
-      prisma.setting.findMany(),
+      // Le hash du mot de passe est exclu : une sauvegarde s'échange, un secret non.
+      prisma.setting.findMany({ where: { key: { not: AUTH_SETTING_KEY } } }),
     ]);
 
   const payload = {
