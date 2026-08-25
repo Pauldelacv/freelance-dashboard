@@ -166,6 +166,39 @@ test.describe("cœur du produit", () => {
     await expect(page.getByRole("link", { name: /Site importé/ })).toBeVisible();
   });
 
+  test("exporte les données", async ({ page }) => {
+    await page.goto("/reglages");
+
+    const [jsonDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: "Télécharger le JSON" }).click(),
+    ]);
+    expect(jsonDownload.suggestedFilename()).toMatch(/^sauvegarde-\d{4}-\d{2}-\d{2}\.json$/);
+
+    const [csvDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: "Jours travaillés" }).click(),
+    ]);
+    expect(csvDownload.suggestedFilename()).toMatch(/^jours-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+
+  test("refuse l'export sans session", async ({ page }) => {
+    await page.context().clearCookies();
+    const response = await page.request.get("/api/backup");
+    // Le middleware renvoie vers la page de connexion.
+    expect(response.url()).toContain("/login");
+  });
+
+  test("expose un manifeste installable", async ({ page }) => {
+    const response = await page.request.get("/manifest.webmanifest");
+    expect(response.ok()).toBe(true);
+    const manifest = await response.json();
+    expect(manifest.name).toBe("Freelance Dashboard");
+    expect(manifest.display).toBe("standalone");
+    const icon = await page.request.get(manifest.icons[0].src);
+    expect(icon.ok()).toBe(true);
+  });
+
   test("le tableau de bord agrège les jours cochés", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("À facturer").first()).toBeVisible();

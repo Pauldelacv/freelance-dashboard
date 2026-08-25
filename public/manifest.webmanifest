@@ -1,0 +1,21 @@
+{
+  "name": "Freelance Dashboard",
+  "short_name": "Freelance",
+  "description": "Jours travaillés, clients & TJM, veille et pilotage d'activité.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fbfbfd",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Calendrier", "url": "/calendrier" },
+    { "name": "Clients", "url": "/clients" }
+  ]
+}

@@ -201,9 +201,12 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 ### 4.7 Confort
 
 - **Dark mode** (défaut système).
+- **Palette des clients validée** : l'ordre des huit teintes passe les contrôles de
+  séparation (daltonisme et vision normale) en clair comme en sombre. Ne pas
+  réordonner sans revalider — voir `lib/colors.ts`.
 - **PWA** installable sur mobile — cocher ses jours depuis le téléphone.
 - Recherche globale `⌘K` (clients, missions, prospects, sites).
-- **Export CSV** de toutes les tables + **backup complet JSON** en 1 clic depuis les réglages.
+- **Export CSV** des tables principales (`;` et décimales à la virgule, ouvrable tel quel dans un tableur français) + **backup complet JSON** en 1 clic depuis les réglages.
 - Interface en **français**, montants en euros, **sans TVA** (mention « TVA non applicable, art. 293 B du CGI » sur les récapitulatifs copiables vers Indy).
 
 ---
@@ -350,7 +353,11 @@ Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, te
 ## 10. Conventions pour Claude Code
 
 - Toujours développer sur `claude/freelance-dashboard-sehxjx`.
-- Avant commit : `npm run lint && npx tsc --noEmit && npm test`.
+- Avant commit : `npm run check` (lint + typecheck + tests). Les parcours
+  critiques se rejouent avec `npm run e2e`.
+- Préférer une modification de fichier vérifiée (l'outil échoue si le motif a
+  changé) à un remplacement de chaîne silencieux : Prettier réordonne les classes
+  Tailwind, et un `replace` peut ne rien remplacer sans prévenir.
 - Commits en français, format `type(scope): description` (`feat(calendrier): sélection par glissement`).
 - Aucune donnée personnelle, aucun secret dans le dépôt — tout passe par les variables d'environnement.
 - Ne jamais casser une migration Prisma déjà appliquée : toujours une nouvelle migration.

@@ -431,7 +431,7 @@ export function CalendarBoard({
                     <span
                       key={entry.id}
                       className={cn(
-                        "block truncate rounded px-1 py-0.5 text-[10px] font-medium text-white",
+                        "block min-h-3 truncate rounded px-1 py-0.5 text-[10px] font-medium text-white",
                         entry.type !== "billable" && "opacity-60",
                       )}
                       style={{
@@ -440,7 +440,9 @@ export function CalendarBoard({
                       }}
                     >
                       {entry.fraction === 0.5 ? "½ " : ""}
-                      {entry.clientName ?? "—"}
+                      {/* Sur téléphone la case est trop étroite pour un nom : la
+                          couleur et le montant suffisent à identifier le client. */}
+                      <span className="hidden sm:inline">{entry.clientName ?? "—"}</span>
                     </span>
                   ))}
                 </span>
