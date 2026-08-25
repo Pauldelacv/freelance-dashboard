@@ -220,7 +220,7 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
   réordonner sans revalider — voir `lib/colors.ts`.
 - **PWA** installable sur mobile — cocher ses jours depuis le téléphone.
 - Recherche globale `⌘K` (clients, prospects, sites, pages) — insensible aux accents et à la casse, pilotable entièrement au clavier. Appariement isolé dans `lib/search.ts`, testé unitairement.
-- **Export CSV** des tables principales (`;` et décimales à la virgule, ouvrable tel quel dans un tableur français) + **backup complet JSON** en 1 clic depuis les réglages.
+- **Export CSV** des tables principales (`;` et décimales à la virgule, ouvrable tel quel dans un tableur français) + **backup complet JSON** en 1 clic depuis les réglages. La **restauration** relit ce JSON et **remplace** la base — jamais de fusion, confirmation par le mot `REMPLACER`, version de format inconnue refusée ; le hash du mot de passe n'est ni exporté ni écrasé (`lib/backup.ts`, aller-retour couvert par un test sur deux bases réelles).
 - Interface en **français**, montants en euros, **sans TVA** (mention « TVA non applicable, art. 293 B du CGI » sur les récapitulatifs copiables vers Indy).
 
 ---

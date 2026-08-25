@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { prisma } from "@/lib/db";
 import { changePassword, requireSession } from "@/lib/auth";
+import { RESTORE_CONFIRMATION, parseBackup, restoreBackup, summarizeCounts } from "@/lib/backup";
 import { saveSettings } from "@/lib/settings";
 import { parseMoney } from "@/lib/money";
 import { passwordChangeSchema, toFieldErrors, type FormState } from "@/lib/validation";
@@ -96,4 +98,50 @@ export async function changePasswordAction(
     return result.field ? { fieldErrors: { [result.field]: message } } : { error: message };
   }
   return { ok: true };
+}
+
+/** Un fichier de sauvegarde plus gros que ça n'est plus une sauvegarde de ce dashboard. */
+const MAX_BACKUP_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Restauration depuis une sauvegarde JSON (issue #7).
+ *
+ * Remplacement complet, jamais fusion : la question « que faire des lignes qui
+ * existent des deux côtés ? » n'a pas de bonne réponse générale, alors que
+ * « la base devient celle du fichier » se vérifie. D'où la confirmation écrite,
+ * et le rappel de télécharger une sauvegarde avant d'écraser.
+ */
+export async function restoreBackupAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireSession();
+
+  const confirmation = String(formData.get("confirmation") ?? "")
+    .trim()
+    .toUpperCase();
+  if (confirmation !== RESTORE_CONFIRMATION) {
+    return {
+      fieldErrors: {
+        confirmation: `Saisissez « ${RESTORE_CONFIRMATION} » pour confirmer le remplacement.`,
+      },
+    };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { fieldErrors: { file: "Choisissez un fichier de sauvegarde." } };
+  }
+  if (file.size > MAX_BACKUP_BYTES) {
+    return { fieldErrors: { file: "Fichier trop volumineux pour être une sauvegarde." } };
+  }
+
+  const parsed = parseBackup(await file.text());
+  if (!parsed.ok) return { error: parsed.error };
+
+  const counts = await restoreBackup(prisma, parsed.data);
+
+  // Tout a changé : on invalide sous la racine plutôt que page par page.
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Données remplacées — ${summarizeCounts(counts)}.` };
 }

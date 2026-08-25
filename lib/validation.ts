@@ -32,6 +32,13 @@ export const optionalIsoDate = z
   .transform((value) => (value === "" ? null : value))
   .refine((value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value), "Date invalide.");
 
+/**
+ * Mot à saisir pour confirmer un remplacement de toutes les données.
+ * Ici et non dans `lib/backup.ts` : le formulaire de restauration est un
+ * composant client, et `lib/backup.ts` tire Prisma avec lui.
+ */
+export const RESTORE_CONFIRMATION = "REMPLACER";
+
 /** Longueur minimale du mot de passe, ici comme dans scripts/hash-password.ts. */
 export const MIN_PASSWORD_LENGTH = 8;
 
@@ -60,6 +67,8 @@ export const passwordChangeSchema = z
 export interface FormState {
   ok?: boolean;
   error?: string;
+  /** Compte rendu de succès, quand « c'est enregistré » ne suffit pas (import). */
+  message?: string;
   fieldErrors?: Record<string, string>;
 }
 

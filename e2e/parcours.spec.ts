@@ -374,3 +374,42 @@ test.describe("mot de passe", () => {
     await expect(page.getByText("Mot de passe modifié")).toBeVisible();
   });
 });
+
+/**
+ * En dernier : une restauration remplace toute la base par l'instantané
+ * téléchargé juste avant. Les tests qui précèdent gardent donc leur terrain.
+ */
+test.describe("restauration", () => {
+  test("remet la base dans l'état de la sauvegarde téléchargée", async ({ page }) => {
+    await login(page);
+    await page.goto("/reglages");
+
+    const [sauvegarde] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: "Télécharger le JSON" }).click(),
+    ]);
+    const fichier = await sauvegarde.path();
+
+    // Une donnée créée après la sauvegarde : elle ne doit pas survivre.
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Postérieur");
+    await page.getByLabel("TJM (€)").fill("300");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await expect(page.getByRole("link", { name: /Client Postérieur/ })).toBeVisible();
+
+    await page.goto("/reglages");
+    // Sans le mot de confirmation, le remplacement reste hors de portée.
+    await page.setInputFiles("#backup-file", fichier);
+    await expect(page.getByRole("button", { name: "Remplacer les données" })).toBeDisabled();
+
+    await page.getByLabel(/Tapez REMPLACER/).fill("REMPLACER");
+    await page.getByRole("button", { name: "Remplacer les données" }).click();
+    await expect(page.getByText(/Données remplacées/)).toBeVisible();
+
+    await page.goto("/clients");
+    await expect(page.getByRole("link", { name: /Client Postérieur/ })).toHaveCount(0);
+    // Et ce qui existait avant la sauvegarde est toujours là.
+    await expect(page.getByRole("link", { name: /Client Clôture/ })).toBeVisible();
+  });
+});
