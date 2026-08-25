@@ -117,6 +117,41 @@ test.describe("cœur du produit", () => {
     await expect(page.getByRole("link", { name: "Facturation Indy" })).toBeVisible();
   });
 
+  test("ajoute un site de veille et le filtre", async ({ page }) => {
+    await page.goto("/veille");
+    await page.getByRole("button", { name: "Ajouter un site" }).first().click();
+    // Le filtre de la page et le formulaire partagent des libellés : on reste
+    // dans la boîte de dialogue.
+    const formulaire = page.getByRole("dialog");
+    await formulaire.getByLabel("URL").fill("https://exemple-veille.fr");
+    await formulaire.getByLabel("Titre").fill("Exemple Veille");
+    await formulaire.getByLabel("Catégorie").fill("Technique");
+    await formulaire.getByLabel("Tags").fill("Next, SEO");
+    await formulaire.getByRole("button", { name: "Ajouter", exact: true }).click();
+
+    await expect(page.getByRole("link", { name: /Exemple Veille/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "#next" })).toBeVisible();
+
+    // Le filtre par tag masque ce qui ne correspond pas.
+    await page.getByRole("button", { name: "#seo" }).click();
+    await expect(page.getByRole("link", { name: /Exemple Veille/ })).toBeVisible();
+
+    // La recherche textuelle aussi.
+    await page.getByRole("button", { name: "#seo" }).click();
+    await page.getByLabel("Rechercher").fill("introuvable-xyz");
+    await expect(page.getByText("Aucun site ne correspond à ces filtres.")).toBeVisible();
+  });
+
+  test("importe une liste de sites en JSON", async ({ page }) => {
+    await page.goto("/veille");
+    await page.getByRole("button", { name: "Importer" }).first().click();
+    await page
+      .locator("textarea[name=payload]")
+      .fill('[{"title":"Site importé","url":"https://importe.fr","category":"Import"}]');
+    await page.getByRole("button", { name: "Importer", exact: true }).last().click();
+    await expect(page.getByRole("link", { name: /Site importé/ })).toBeVisible();
+  });
+
   test("le tableau de bord agrège les jours cochés", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("À facturer").first()).toBeVisible();
