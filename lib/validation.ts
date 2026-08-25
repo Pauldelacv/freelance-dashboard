@@ -32,6 +32,30 @@ export const optionalIsoDate = z
   .transform((value) => (value === "" ? null : value))
   .refine((value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value), "Date invalide.");
 
+/** Longueur minimale du mot de passe, ici comme dans scripts/hash-password.ts. */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/** Changement de mot de passe depuis les réglages. */
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Saisissez votre mot de passe actuel."),
+    newPassword: z
+      .string()
+      .min(
+        MIN_PASSWORD_LENGTH,
+        `Mot de passe trop court : ${MIN_PASSWORD_LENGTH} caractères minimum.`,
+      ),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "La confirmation ne correspond pas.",
+    path: ["confirmPassword"],
+  })
+  .refine((data) => data.newPassword !== data.currentPassword, {
+    message: "Le nouveau mot de passe doit être différent de l'actuel.",
+    path: ["newPassword"],
+  });
+
 /** État renvoyé par toutes les Server Actions de formulaire. */
 export interface FormState {
   ok?: boolean;

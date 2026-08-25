@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { DataExport } from "@/components/settings/data-export";
+import { PasswordForm } from "@/components/settings/password-form";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { getSettings } from "@/lib/settings";
 
@@ -12,10 +13,11 @@ export default async function ReglagesPage() {
     <>
       <PageHeader
         title="Réglages"
-        description="Lien Indy, objectifs, fiscalité et préférences de saisie."
+        description="Lien Indy, objectifs, fiscalité, mot de passe et préférences de saisie."
       />
       <div className="flex max-w-3xl flex-col gap-4">
         <SettingsForm settings={settings} />
+        <PasswordForm />
         <DataExport />
       </div>
     </>

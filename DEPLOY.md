@@ -45,6 +45,11 @@ fichier `.env` local (les `$` y sont échappés). Gardez le premier pour l'étap
 Le mot de passe en clair n'est stocké nulle part : seul son hash argon2 voyage
 jusqu'au serveur.
 
+`APP_PASSWORD_HASH` est le mot de passe **d'amorçage** : une fois l'application en
+ligne, il se change depuis **Réglages → Mot de passe**, sans redéploiement. Le
+nouveau hash est alors rangé dans la base du volume `/data` et l'emporte sur la
+variable d'environnement (voir « Mot de passe oublié » au § 11).
+
 ---
 
 ## 3. Créer la ressource dans Coolify
@@ -64,7 +69,7 @@ Onglet **Environment Variables**, ajouter :
 
 | Variable              | Valeur                             | Remarque                                          |
 | --------------------- | ---------------------------------- | ------------------------------------------------- |
-| `APP_PASSWORD_HASH`   | le hash argon2 de l'étape 2        | **Build variable : non.** Runtime uniquement      |
+| `APP_PASSWORD_HASH`   | le hash argon2 de l'étape 2        | mot de passe d'amorçage. **Build variable : non** |
 | `SESSION_SECRET`      | la chaîne aléatoire de l'étape 2   | en changer déconnecte toutes les sessions         |
 | `DATABASE_URL`        | `file:/data/app.db`                | doit pointer dans le volume                       |
 | `TZ`                  | `Europe/Paris`                     | les jours travaillés sont datés en heure de Paris |
@@ -91,6 +96,12 @@ effacées à chaque redéploiement.
 
 Onglet **Domains** : renseigner `https://dashboard.mon-domaine.fr`.
 Coolify demande et renouvelle le certificat Let's Encrypt automatiquement.
+
+En attendant le domaine, l'application reste utilisable en clair sur l'adresse IP
+du VPS : le cookie de session n'est marqué `Secure` que si la requête arrive
+réellement en HTTPS (en-tête `X-Forwarded-Proto` posé par le proxy de Coolify).
+Un cookie `Secure` servi en `http://` serait silencieusement jeté par le
+navigateur, et le mot de passe redemandé à chaque page.
 
 ---
 
@@ -174,9 +185,23 @@ est monté.
 `APP_PASSWORD_HASH` ou `SESSION_SECRET` n'est pas défini côté runtime. Attention
 à ne pas les avoir cochés « Build variable » uniquement.
 
+**Changer le mot de passe.**
+Depuis **Réglages → Mot de passe**, mot de passe actuel à l'appui. Les sessions
+ouvertes sur les autres appareils tombent immédiatement ; celle du navigateur qui
+fait le changement est renouvelée.
+
 **Mot de passe oublié.**
-Relancer `npm run hash-password`, remplacer `APP_PASSWORD_HASH` dans Coolify,
-redéployer. Aucune donnée n'est perdue.
+Si le mot de passe n'a jamais été changé depuis l'interface : relancer
+`npm run hash-password`, remplacer `APP_PASSWORD_HASH` dans Coolify, redéployer.
+S'il a été changé depuis l'interface, c'est la base qui fait foi — il faut y
+supprimer la ligne d'authentification pour revenir à la variable d'environnement.
+Dans un terminal du conteneur (onglet **Terminal** de Coolify) :
+
+```bash
+node -e "const db=require('better-sqlite3')('/data/app.db');db.prepare(\"DELETE FROM Setting WHERE key='auth'\").run()"
+```
+
+Aucune donnée n'est perdue : cette ligne ne contient que le hash du mot de passe.
 
 **Repartir d'une base vierge.**
 Supprimer `/data/app.db` (et les fichiers `-wal`/`-shm`) puis redémarrer : les

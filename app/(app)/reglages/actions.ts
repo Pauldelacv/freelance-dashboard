@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { changePassword, requireSession } from "@/lib/auth";
 import { saveSettings } from "@/lib/settings";
 import { parseMoney } from "@/lib/money";
-import { toFieldErrors, type FormState } from "@/lib/validation";
+import { passwordChangeSchema, toFieldErrors, type FormState } from "@/lib/validation";
 
 const formSchema = z.object({
   indyUrl: z
@@ -68,5 +68,32 @@ export async function saveSettingsAction(_prev: FormState, formData: FormData): 
   revalidatePath("/reglages");
   revalidatePath("/");
   revalidatePath("/calendrier");
+  return { ok: true };
+}
+
+/**
+ * Changement du mot de passe de connexion (issue #12).
+ *
+ * Le nouveau hash est rangé en base : APP_PASSWORD_HASH n'est plus que le mot
+ * de passe d'amorçage. Toutes les autres sessions ouvertes tombent.
+ */
+export async function changePasswordAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireSession();
+
+  const parsed = passwordChangeSchema.safeParse({
+    currentPassword: formData.get("currentPassword") ?? "",
+    newPassword: formData.get("newPassword") ?? "",
+    confirmPassword: formData.get("confirmPassword") ?? "",
+  });
+  if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
+
+  const result = await changePassword(parsed.data.currentPassword, parsed.data.newPassword);
+  if (!result.ok) {
+    const message = result.error ?? "Le changement de mot de passe a échoué.";
+    return result.field ? { fieldErrors: { [result.field]: message } } : { error: message };
+  }
   return { ok: true };
 }

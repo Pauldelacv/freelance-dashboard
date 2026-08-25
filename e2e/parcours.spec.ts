@@ -27,6 +27,24 @@ test.describe("connexion", () => {
     await login(page);
     await expect(page).toHaveURL("/");
   });
+
+  test("pose un cookie de session utilisable en http", async ({ page }) => {
+    // Régression : le cookie était marqué Secure dès que NODE_ENV valait
+    // "production". Servie en http:// (déploiement sur adresse IP, domaine pas
+    // encore posé), l'application redemandait alors le mot de passe à chaque
+    // page — le navigateur jetant le cookie sans rien dire.
+    await login(page);
+    const cookie = (await page.context().cookies()).find((c) => c.name === "fd_session");
+    expect(cookie).toBeDefined();
+    expect(cookie?.secure).toBe(false);
+    expect(cookie?.httpOnly).toBe(true);
+
+    // Et la session tient d'une page à l'autre.
+    await page.goto("/clients");
+    await expect(page).toHaveURL("/clients");
+    await page.goto("/calendrier");
+    await expect(page).toHaveURL(/\/calendrier/);
+  });
 });
 
 test.describe("cœur du produit", () => {
@@ -116,6 +134,24 @@ test.describe("cœur du produit", () => {
       await expect(page.getByRole("dialog")).toBeHidden();
       await expect(page.getByText(nom)).toBeVisible();
     }
+  });
+
+  test("renvoie vers la connexion quand la session tombe pendant une saisie", async ({ page }) => {
+    // Régression : le middleware redirigeait aussi les appels de Server Action.
+    // Le client Next recevait du HTML au lieu de sa réponse et l'application
+    // plantait sur « An unexpected response was received from the server. »
+    const erreurs: string[] = [];
+    page.on("pageerror", (error) => erreurs.push(error.message));
+
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client sans session");
+    await page.getByLabel("TJM (€)").fill("500");
+    await page.context().clearCookies();
+    await page.getByRole("button", { name: "Créer le client" }).click();
+
+    await expect(page).toHaveURL(/\/login/);
+    expect(erreurs).toEqual([]);
   });
 
   test("enregistre les réglages", async ({ page }) => {
@@ -232,5 +268,46 @@ test.describe("cœur du produit", () => {
     await expect(palette).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(palette).toBeHidden();
+  });
+});
+
+test.describe("mot de passe", () => {
+  const NOUVEAU = "nouveau-motdepasse-e2e";
+
+  async function changer(page: Page, actuel: string, nouveau: string) {
+    await page.goto("/reglages");
+    await page.getByLabel("Mot de passe actuel").fill(actuel);
+    await page.getByLabel("Nouveau mot de passe").fill(nouveau);
+    await page.getByLabel("Confirmation").fill(nouveau);
+    await page.getByRole("button", { name: "Changer le mot de passe" }).click();
+  }
+
+  test("se change depuis les réglages", async ({ page }) => {
+    await login(page);
+
+    // Une saisie incohérente n'écrit rien.
+    await changer(page, "pas-le-bon", NOUVEAU);
+    await expect(page.getByText("Mot de passe actuel incorrect.")).toBeVisible();
+
+    await changer(page, PASSWORD, NOUVEAU);
+    await expect(page.getByText("Mot de passe modifié")).toBeVisible();
+    // La session courante survit au changement.
+    await page.goto("/clients");
+    await expect(page).toHaveURL("/clients");
+
+    // L'ancien mot de passe ne vaut plus rien, le nouveau ouvre la porte.
+    await page.getByRole("button", { name: "Déconnexion" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await page.getByLabel("Mot de passe").fill(PASSWORD);
+    await page.getByRole("button", { name: "Se connecter" }).click();
+    await expect(page.getByText("Mot de passe incorrect.")).toBeVisible();
+
+    await page.getByLabel("Mot de passe").fill(NOUVEAU);
+    await page.getByRole("button", { name: "Se connecter" }).click();
+    await expect(page.getByRole("heading", { name: "Tableau de bord" })).toBeVisible();
+
+    // On repose le mot de passe d'origine pour laisser la base comme on l'a trouvée.
+    await changer(page, NOUVEAU, PASSWORD);
+    await expect(page.getByText("Mot de passe modifié")).toBeVisible();
   });
 });

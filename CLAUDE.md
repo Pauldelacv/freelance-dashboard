@@ -28,7 +28,7 @@ Principe directeur : **rapide à utiliser au quotidien** (2 clics pour cocher un
 | Calendrier      | Grille mensuelle **maison** (pas de lib lourde)                                        | Le besoin = cocher des cases, pas gérer des events                        |
 | Base de données | **SQLite** + volume persistant _(validé)_                                              | 1 fichier = 1 backup, zéro service supplémentaire sur le VPS              |
 | ORM             | **Prisma 7** + driver adapter `better-sqlite3`                                         | Migrations propres, changement SQLite→Postgres = 1 adapter                |
-| Auth            | Session cookie signée, **mot de passe unique** hashé (argon2) en variable d'env        | Mono-utilisateur, pas besoin de NextAuth                                  |
+| Auth            | Session cookie signée, **mot de passe unique** hashé (argon2)                          | Mono-utilisateur, pas besoin de NextAuth                                  |
 | Dates           | **date-fns** + `Europe/Paris`                                                          | Pas de dérive de fuseau sur les jours                                     |
 | Tests           | Vitest (logique métier : calculs CA, charges, jours) + Playwright (parcours critiques) | On teste les calculs, pas le CSS                                          |
 | Qualité         | ESLint + Prettier + `tsc --noEmit`                                                     | Lancés en CI et avant chaque commit                                       |
@@ -37,7 +37,11 @@ Principe directeur : **rapide à utiliser au quotidien** (2 clics pour cocher un
 
 - **Argent stocké en centimes (`Int`)**, jamais en float. Formatage à l'affichage uniquement (`Intl.NumberFormat('fr-FR')`).
 - **Dates de jour stockées en `String` ISO `YYYY-MM-DD`**, pas en `DateTime` — évite tout décalage UTC sur « le 1er du mois ».
-- Toute mutation passe par une **Server Action** validée avec **Zod**.
+- Toute mutation passe par une **Server Action** validée avec **Zod**, et commence
+  par `requireSession()` : le middleware laisse passer les appels de Server Action
+  (une redirection HTTP y est illisible pour le client Next, qui lève « An
+  unexpected response was received from the server »), la garde est donc dans
+  l'action.
 - Pas de `any`. Pas de fetch client si un Server Component suffit.
 - Fichiers en `kebab-case`, composants en `PascalCase`, un composant par fichier.
 
@@ -200,6 +204,16 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 
 ### 4.7 Confort
 
+- **Mot de passe modifiable depuis les réglages.** `APP_PASSWORD_HASH` n'est que
+  le mot de passe d'amorçage : le hash courant vit dans la table `Setting` (clé
+  `auth`, exclue de la sauvegarde JSON) et l'emporte sur la variable
+  d'environnement. Un changement révoque les autres sessions — le middleware
+  n'ayant pas accès à la base, la révocation est vérifiée côté Node en comparant
+  la date d'émission du jeton (`iat`) à celle du changement.
+- **Cookie de session** : `Secure` seulement si la requête arrive réellement en
+  HTTPS (`X-Forwarded-Proto`), jamais sur la foi de `NODE_ENV`. Servi en `http://`,
+  un cookie `Secure` est jeté sans erreur par le navigateur et le mot de passe est
+  redemandé à chaque page.
 - **Dark mode** (défaut système).
 - **Palette des clients validée** : l'ordre des huit teintes passe les contrôles de
   séparation (daltonisme et vision normale) en clair comme en sombre. Ne pas
