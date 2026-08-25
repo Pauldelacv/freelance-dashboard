@@ -80,6 +80,43 @@ test.describe("cœur du produit", () => {
     await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
   });
 
+  test("clôture un mois et le suit jusqu'à l'encaissement", async ({ page }) => {
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Clôture");
+    await page.getByLabel("TJM (€)").fill("500");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await expect(page.getByRole("link", { name: /Client Clôture/ })).toBeVisible();
+
+    await page.goto("/calendrier?m=2026-11");
+    await page.selectOption('select[aria-label="Client actif"]', { label: "Client Clôture" });
+    await page.locator('[data-date="2026-11-02"]').click();
+    await page.locator('[data-date="2026-11-03"]').click();
+
+    await page.goto("/clients");
+    await page.getByRole("link", { name: /Client Clôture/ }).click();
+    await expect(page.getByText("À facturer 1 000,00 €")).toBeVisible();
+
+    await page.getByRole("button", { name: "Marquer facturé" }).click();
+    await expect(page.getByText("Facturé 1 000,00 €")).toBeVisible();
+
+    await page.getByRole("button", { name: "Marquer encaissé" }).click();
+    await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
+  });
+
+  test("enregistre les réglages", async ({ page }) => {
+    await page.goto("/reglages");
+    await page.getByLabel("URL de votre espace Indy").fill("https://app.indy.fr");
+    await page.getByLabel("CA mensuel visé (€)").fill("9000");
+    await page.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(page.getByText("Réglages enregistrés")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("URL de votre espace Indy")).toHaveValue("https://app.indy.fr");
+    // Le lien Indy apparaît dans la navigation une fois l'URL renseignée.
+    await expect(page.getByRole("link", { name: "Facturation Indy" })).toBeVisible();
+  });
+
   test("le tableau de bord agrège les jours cochés", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("À facturer").first()).toBeVisible();

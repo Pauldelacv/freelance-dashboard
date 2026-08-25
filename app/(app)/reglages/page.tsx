@@ -1,20 +1,21 @@
 import { PageHeader } from "@/components/layout/page-header";
-import { ComingSoon } from "@/components/layout/coming-soon";
+import { SettingsForm } from "@/components/settings/settings-form";
+import { getSettings } from "@/lib/settings";
 
 export const metadata = { title: "Réglages" };
 
-export default function ReglagesPage() {
+export default async function ReglagesPage() {
+  const settings = await getSettings();
+
   return (
     <>
-      <PageHeader title="Réglages" description="Objectifs, fiscalité, lien Indy, sauvegarde." />
-      <ComingSoon
-        phase="Phase 1 — réglages"
-        items={[
-          "URL de l'espace Indy et objectifs par défaut",
-          "Taux de charges (26,1 %) et TVA",
-          "Export CSV et sauvegarde JSON complète",
-        ]}
+      <PageHeader
+        title="Réglages"
+        description="Lien Indy, objectifs, fiscalité et préférences de saisie."
       />
+      <div className="max-w-3xl">
+        <SettingsForm settings={settings} />
+      </div>
     </>
   );
 }

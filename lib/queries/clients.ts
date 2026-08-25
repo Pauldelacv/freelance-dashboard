@@ -97,11 +97,16 @@ export interface ClientDetail extends ClientSummary {
     note: string | null;
     missionId: string | null;
   }[];
-  /** Périodes facturables regroupées par mois, pour la clôture vers Indy. */
+  /** Périodes regroupées par mois, pour la clôture vers Indy. */
   months: {
     key: string;
     pendingDays: number;
     pendingRevenue: number;
+    invoicedDays: number;
+    invoicedRevenue: number;
+    paidRevenue: number;
+    /** TJM le plus fréquent du mois, pour le récapitulatif copiable. */
+    rate: number;
   }[];
 }
 
@@ -119,13 +124,40 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
   const year = todayIso().slice(0, 4);
   const breakdown = revenueByBillingStatus(days);
 
-  const monthMap = new Map<string, { pendingDays: number; pendingRevenue: number }>();
+  interface MonthAccumulator {
+    pendingDays: number;
+    pendingRevenue: number;
+    invoicedDays: number;
+    invoicedRevenue: number;
+    paidRevenue: number;
+    rates: Map<number, number>;
+  }
+
+  const monthMap = new Map<string, MonthAccumulator>();
   for (const day of days) {
-    if (day.type !== "billable" || day.billing !== "pending") continue;
+    if (day.type !== "billable") continue;
     const key = day.date.slice(0, 7);
-    const entry = monthMap.get(key) ?? { pendingDays: 0, pendingRevenue: 0 };
-    entry.pendingDays += day.fraction;
-    entry.pendingRevenue += Math.round(day.rate * day.fraction);
+    const entry: MonthAccumulator = monthMap.get(key) ?? {
+      pendingDays: 0,
+      pendingRevenue: 0,
+      invoicedDays: 0,
+      invoicedRevenue: 0,
+      paidRevenue: 0,
+      rates: new Map(),
+    };
+    const amount = Math.round(day.rate * day.fraction);
+
+    if (day.billing === "pending") {
+      entry.pendingDays += day.fraction;
+      entry.pendingRevenue += amount;
+    } else if (day.billing === "invoiced") {
+      entry.invoicedDays += day.fraction;
+      entry.invoicedRevenue += amount;
+    } else {
+      entry.paidRevenue += amount;
+    }
+
+    entry.rates.set(day.rate, (entry.rates.get(day.rate) ?? 0) + day.fraction);
     monthMap.set(key, entry);
   }
 
@@ -168,7 +200,20 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
       missionId: day.missionId,
     })),
     months: [...monthMap.entries()]
-      .map(([key, value]) => ({ key, ...value }))
+      .map(([key, value]) => {
+        const [dominantRate] = [...value.rates.entries()].sort((a, b) => b[1] - a[1])[0] ?? [
+          client.defaultRate,
+        ];
+        return {
+          key,
+          pendingDays: value.pendingDays,
+          pendingRevenue: value.pendingRevenue,
+          invoicedDays: value.invoicedDays,
+          invoicedRevenue: value.invoicedRevenue,
+          paidRevenue: value.paidRevenue,
+          rate: dominantRate,
+        };
+      })
       .sort((a, b) => b.key.localeCompare(a.key)),
   };
 }
