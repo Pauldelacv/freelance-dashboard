@@ -98,6 +98,21 @@ test.describe("cœur du produit", () => {
     await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
   });
 
+  test("bascule sur la vue annuelle en lecture seule", async ({ page }) => {
+    await page.goto("/calendrier?m=2026-10");
+    await page.getByRole("link", { name: "Année" }).click();
+
+    await expect(page).toHaveURL(/vue=annee&a=2026/);
+    // Les jours d'octobre remontent dans les totaux de l'année.
+    await expect(page.getByTestId("year-billable-days")).toHaveText("4");
+    await expect(page.getByTestId("year-revenue")).toHaveText("2 400,00 €");
+
+    // Un mois de la grille renvoie vers la vue mensuelle, où l'on saisit.
+    await page.getByRole("link", { name: "octobre" }).click();
+    await expect(page).toHaveURL(/m=2026-10/);
+    await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
+  });
+
   test("clôture un mois et le suit jusqu'à l'encaissement", async ({ page }) => {
     await page.goto("/clients");
     await page.getByRole("button", { name: "Nouveau client" }).first().click();
@@ -120,6 +135,36 @@ test.describe("cœur du produit", () => {
 
     await page.getByRole("button", { name: "Marquer encaissé" }).click();
     await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
+  });
+
+  test("supprime un client sans jour saisi", async ({ page }) => {
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Jetable");
+    await page.getByLabel("TJM (€)").fill("400");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await expect(page.getByRole("link", { name: /Client Jetable/ })).toBeVisible();
+
+    await page.getByRole("button", { name: "Supprimer Client Jetable" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Supprimer définitivement" })
+      .click();
+
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByRole("link", { name: /Client Jetable/ })).toHaveCount(0);
+  });
+
+  test("propose l'archivage plutôt que la suppression d'un client qui porte des jours", async ({
+    page,
+  }) => {
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Supprimer Client Clôture" }).click();
+
+    const boite = page.getByRole("dialog");
+    await expect(boite.getByText(/jours? saisis?/)).toBeVisible();
+    await expect(boite.getByRole("button", { name: "Supprimer définitivement" })).toBeDisabled();
+    await expect(boite.getByRole("button", { name: "Archiver" })).toBeVisible();
   });
 
   test("enchaîne deux créations sans rouvrir la page", async ({ page }) => {
@@ -165,6 +210,24 @@ test.describe("cœur du produit", () => {
     await expect(page.getByLabel("URL de votre espace Indy")).toHaveValue("https://app.indy.fr");
     // Le lien Indy apparaît dans la navigation une fois l'URL renseignée.
     await expect(page.getByRole("link", { name: "Facturation Indy" })).toBeVisible();
+  });
+
+  test("donne au mois affiché son propre objectif", async ({ page }) => {
+    await page.goto("/");
+    // Selon qu'un objectif par défaut existe déjà, le point d'entrée s'appelle
+    // « Modifier » ou « en définir un » : c'est la même boîte.
+    await page.getByRole("button", { name: /^(Modifier|en définir un)$/ }).click();
+
+    const boite = page.getByRole("dialog");
+    await boite.locator("#month-revenue").fill("12345");
+    await boite.getByRole("button", { name: "Enregistrer le mois" }).click();
+
+    await expect(page.getByRole("dialog")).toBeHidden();
+    // La jauge suit l'objectif du mois, pas la valeur par défaut des réglages.
+    await expect(page.getByText("Objectif 12 345 €")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText("Objectif 12 345 €")).toBeVisible();
   });
 
   test("ajoute un site de veille et le filtre", async ({ page }) => {
@@ -309,5 +372,44 @@ test.describe("mot de passe", () => {
     // On repose le mot de passe d'origine pour laisser la base comme on l'a trouvée.
     await changer(page, NOUVEAU, PASSWORD);
     await expect(page.getByText("Mot de passe modifié")).toBeVisible();
+  });
+});
+
+/**
+ * En dernier : une restauration remplace toute la base par l'instantané
+ * téléchargé juste avant. Les tests qui précèdent gardent donc leur terrain.
+ */
+test.describe("restauration", () => {
+  test("remet la base dans l'état de la sauvegarde téléchargée", async ({ page }) => {
+    await login(page);
+    await page.goto("/reglages");
+
+    const [sauvegarde] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: "Télécharger le JSON" }).click(),
+    ]);
+    const fichier = await sauvegarde.path();
+
+    // Une donnée créée après la sauvegarde : elle ne doit pas survivre.
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Postérieur");
+    await page.getByLabel("TJM (€)").fill("300");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await expect(page.getByRole("link", { name: /Client Postérieur/ })).toBeVisible();
+
+    await page.goto("/reglages");
+    // Sans le mot de confirmation, le remplacement reste hors de portée.
+    await page.setInputFiles("#backup-file", fichier);
+    await expect(page.getByRole("button", { name: "Remplacer les données" })).toBeDisabled();
+
+    await page.getByLabel(/Tapez REMPLACER/).fill("REMPLACER");
+    await page.getByRole("button", { name: "Remplacer les données" }).click();
+    await expect(page.getByText(/Données remplacées/)).toBeVisible();
+
+    await page.goto("/clients");
+    await expect(page.getByRole("link", { name: /Client Postérieur/ })).toHaveCount(0);
+    // Et ce qui existait avant la sauvegarde est toujours là.
+    await expect(page.getByRole("link", { name: /Client Clôture/ })).toBeVisible();
   });
 });

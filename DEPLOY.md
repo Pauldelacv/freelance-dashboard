@@ -158,7 +158,21 @@ aussi si le conteneur tourne, ou arrêter le conteneur avant la copie pour n'avo
 que `app.db`.
 
 Coolify sait aussi sauvegarder un volume vers S3 : **Storages → Backups**.
-L'application proposera en plus un export JSON complet depuis les réglages (phase 6).
+
+### Export et import JSON, depuis l'application
+
+**Réglages → Sauvegarde et export → Télécharger le JSON** produit un fichier
+qui contient toutes les tables. **Réglages → Restauration** le relit et
+**remplace** la base : rien n'est fusionné, ce qui n'est pas dans le fichier
+disparaît. La confirmation demande d'écrire le mot `REMPLACER`, et une
+sauvegarde d'une version de format inconnue est refusée plutôt qu'importée de
+travers.
+
+Le hash du mot de passe n'est ni exporté ni écrasé : restaurer une sauvegarde
+venue d'une autre instance ne change pas le mot de passe de celle-ci.
+
+Ce chemin sert à emporter ses données ou à repartir d'un état connu ; la
+sauvegarde de référence reste le fichier `/data/app.db` ci-dessus.
 
 ---
 

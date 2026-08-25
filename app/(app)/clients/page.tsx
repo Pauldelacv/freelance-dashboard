@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ClientFormDialog } from "@/components/clients/client-form-dialog";
+import { ClientRowActions } from "@/components/clients/client-row-actions";
 import { Badge, ColorDot } from "@/components/ui/badge";
 import { Card, CardBar, CardTitle } from "@/components/ui/card";
 import { Table, TableWrap, TBody, TD, TFoot, TH, THead, TR } from "@/components/ui/table";
@@ -107,6 +108,9 @@ function ClientTable({
               </TH>
               <TH className="hidden xl:table-cell">Dernier jour</TH>
               <TH className="hidden sm:table-cell">Statut</TH>
+              <TH numeric>
+                <span className="sr-only">Actions</span>
+              </TH>
             </tr>
           </THead>
 
@@ -150,6 +154,9 @@ function ClientTable({
                     {STATUS_LABELS[client.status] ?? client.status}
                   </Badge>
                 </TD>
+                <TD className="w-0">
+                  <ClientRowActions client={client} workDayCount={client.workDayCount} />
+                </TD>
               </TR>
             ))}
           </TBody>
@@ -173,6 +180,7 @@ function ClientTable({
                 </TD>
                 <TD className="hidden xl:table-cell" />
                 <TD className="hidden sm:table-cell" />
+                <TD />
               </tr>
             </TFoot>
           ) : null}

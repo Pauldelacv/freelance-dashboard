@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   businessDaysInMonth,
+  businessDaysInYear,
   easterSunday,
   holidayName,
   isBusinessDay,
@@ -46,5 +47,16 @@ describe("jours ouvrés", () => {
     expect(businessDaysInMonth(2026, 8)).toBe(21);
     // Mai 2026 : 1er (vendredi), 8 (vendredi), 14 (Ascension, jeudi), 25 (Pentecôte, lundi).
     expect(businessDaysInMonth(2026, 5)).toBe(17);
+  });
+
+  it("compte les jours ouvrés de l'année", () => {
+    // 2026 : 261 jours de semaine, moins 9 fériés qui tombent en semaine
+    // (le 15 août et le 1er novembre tombent un week-end).
+    expect(businessDaysInYear(2026)).toBe(252);
+    // Contrôle croisé : la somme des douze mois.
+    const parMois = Array.from({ length: 12 }, (_, index) =>
+      businessDaysInMonth(2026, index + 1),
+    ).reduce((sum, value) => sum + value, 0);
+    expect(businessDaysInYear(2026)).toBe(parMois);
   });
 });

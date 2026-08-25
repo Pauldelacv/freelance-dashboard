@@ -15,6 +15,16 @@ const monthLabelFormatter = new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
 });
 
+const monthNameFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: TIME_ZONE,
+  month: "long",
+});
+
+const monthShortFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: TIME_ZONE,
+  month: "short",
+});
+
 const longDateFormatter = new Intl.DateTimeFormat("fr-FR", {
   timeZone: TIME_ZONE,
   weekday: "long",
@@ -96,6 +106,16 @@ export function addMonths(
 /** "août 2026" */
 export function formatMonthLabel(year: number, month: number): string {
   return monthLabelFormatter.format(fromIsoDate(firstDayOfMonth(year, month)));
+}
+
+/** "août" — étiquette d'un mois seul, pour la vue annuelle. */
+export function formatMonthName(year: number, month: number): string {
+  return monthNameFormatter.format(fromIsoDate(firstDayOfMonth(year, month)));
+}
+
+/** "août" abrégé — cases de mois de la répartition d'objectif. */
+export function formatMonthShort(year: number, month: number): string {
+  return monthShortFormatter.format(fromIsoDate(firstDayOfMonth(year, month)));
 }
 
 /** "mardi 25 août 2026" */

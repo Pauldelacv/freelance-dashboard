@@ -28,6 +28,8 @@ export interface ClientSummary {
   toInvoice: number;
   awaitingPayment: number;
   lastWorkedDate: string | null;
+  /** Nombre de jours saisis, congés compris : ce qui interdit la suppression. */
+  workDayCount: number;
 }
 
 export async function listClientSummaries(): Promise<ClientSummary[]> {
@@ -71,6 +73,7 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
         clientDays.length > 0
           ? clientDays.reduce((latest, day) => (day.date > latest ? day.date : latest), "")
           : null,
+      workDayCount: clientDays.length,
     };
   });
 }
@@ -179,6 +182,7 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
     toInvoice: breakdown.pending,
     awaitingPayment: breakdown.invoiced,
     lastWorkedDate: client.workDays[0]?.date ?? null,
+    workDayCount: client.workDays.length,
     workedDaysCount: workedDays(days),
     missions: client.missions.map((mission) => ({
       id: mission.id,
