@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { ArrowUpRight, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ClientFormDialog } from "@/components/clients/client-form-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { listClientSummaries } from "@/lib/queries/clients";
+import { Badge, ColorDot } from "@/components/ui/badge";
+import { Card, CardBar, CardTitle } from "@/components/ui/card";
+import { Table, TableWrap, TBody, TD, TFoot, TH, THead, TR } from "@/components/ui/table";
+import { listClientSummaries, type ClientSummary } from "@/lib/queries/clients";
 import { formatMoney, formatMoneyShort } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Clients" };
 
@@ -41,71 +43,141 @@ export default async function ClientsPage() {
           <ClientFormDialog />
         </Card>
       ) : (
-        <div className="flex flex-col gap-6">
-          <ClientGrid clients={active} />
-          {archived.length > 0 ? (
-            <section>
-              <h2 className="text-muted-foreground mb-3 text-sm font-medium">Archivés</h2>
-              <ClientGrid clients={archived} />
-            </section>
-          ) : null}
+        <div className="flex flex-col gap-4">
+          <ClientTable clients={active} withTotals />
+          {archived.length > 0 ? <ClientTable clients={archived} title="Archivés" /> : null}
         </div>
       )}
     </>
   );
 }
 
-function ClientGrid({ clients }: { clients: Awaited<ReturnType<typeof listClientSummaries>> }) {
-  return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {clients.map((client) => (
-        <Card key={client.id} className="flex flex-col gap-4 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span
-                className="size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: client.color }}
-                aria-hidden
-              />
-              <div className="min-w-0">
-                <Link
-                  href={`/clients/${client.id}`}
-                  className="flex items-center gap-1 font-medium hover:underline"
-                >
-                  <span className="truncate">{client.name}</span>
-                  <ArrowUpRight className="text-muted-foreground size-3.5 shrink-0" />
-                </Link>
-                {client.company ? (
-                  <p className="text-muted-foreground truncate text-xs">{client.company}</p>
-                ) : null}
-              </div>
-            </div>
-            <Badge variant={client.status === "archived" ? "muted" : "outline"}>
-              {STATUS_LABELS[client.status] ?? client.status}
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Stat label="TJM" value={formatMoneyShort(client.defaultRate)} />
-            <Stat label="CA de l'année" value={formatMoneyShort(client.yearRevenue)} />
-            <Stat label="Jours facturés" value={client.totalDays.toLocaleString("fr-FR")} />
-            <Stat
-              label="À facturer"
-              value={formatMoney(client.toInvoice)}
-              tone={client.toInvoice > 0 ? "warning" : undefined}
-            />
-          </div>
-        </Card>
-      ))}
-    </div>
+/**
+ * Les clients se lisent en colonne, pas en galerie.
+ *
+ * Une grille de cartes empêche la seule question qu'on se pose sur cet écran :
+ * *lequel me doit le plus, lequel a le meilleur TJM ?* Les valeurs n'y sont
+ * jamais sur la même verticale — et deux cartes voisines se décalent dès que
+ * l'une porte une raison sociale et l'autre non. Le tableau aligne, et permet
+ * en prime une ligne de totaux, qu'une galerie ne peut pas produire.
+ */
+function ClientTable({
+  clients,
+  title,
+  withTotals,
+}: {
+  clients: ClientSummary[];
+  title?: string;
+  withTotals?: boolean;
+}) {
+  const totals = clients.reduce(
+    (sum, client) => ({
+      days: sum.days + client.totalDays,
+      yearRevenue: sum.yearRevenue + client.yearRevenue,
+      toInvoice: sum.toInvoice + client.toInvoice,
+      awaitingPayment: sum.awaitingPayment + client.awaitingPayment,
+    }),
+    { days: 0, yearRevenue: 0, toInvoice: 0, awaitingPayment: 0 },
   );
-}
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "warning" }) {
   return (
-    <div>
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className={`tabular font-medium ${tone === "warning" ? "text-warning" : ""}`}>{value}</p>
-    </div>
+    <Card className="overflow-hidden">
+      {title ? (
+        <CardBar>
+          <CardTitle className="text-muted-foreground">{title}</CardTitle>
+          <span className="text-subtle-foreground tabular text-xs">
+            {clients.length} client{clients.length > 1 ? "s" : ""}
+          </span>
+        </CardBar>
+      ) : null}
+
+      <TableWrap>
+        <Table>
+          <THead>
+            <tr>
+              <TH>Client</TH>
+              <TH numeric>TJM</TH>
+              <TH numeric className="hidden md:table-cell">
+                Jours
+              </TH>
+              <TH numeric>CA de l&apos;année</TH>
+              <TH numeric>À facturer</TH>
+              <TH numeric className="hidden lg:table-cell">
+                En attente
+              </TH>
+              <TH className="hidden xl:table-cell">Dernier jour</TH>
+              <TH className="hidden sm:table-cell">Statut</TH>
+            </tr>
+          </THead>
+
+          <TBody>
+            {clients.map((client) => (
+              <TR key={client.id}>
+                <TD>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ColorDot color={client.color} />
+                    <div className="min-w-0">
+                      <Link
+                        href={`/clients/${client.id}`}
+                        className="font-medium hover:underline"
+                        // La zone cliquable couvre toute la ligne sans imbriquer
+                        // d'éléments interactifs les uns dans les autres.
+                      >
+                        <span className="truncate">{client.name}</span>
+                      </Link>
+                      {client.company ? (
+                        <p className="text-subtle-foreground truncate text-xs">{client.company}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </TD>
+                <TD numeric>{formatMoneyShort(client.defaultRate)}</TD>
+                <TD numeric className="hidden md:table-cell">
+                  {client.totalDays.toLocaleString("fr-FR")}
+                </TD>
+                <TD numeric>{formatMoneyShort(client.yearRevenue)}</TD>
+                <TD numeric className={cn(client.toInvoice > 0 && "text-warning font-medium")}>
+                  {client.toInvoice > 0 ? formatMoney(client.toInvoice) : "—"}
+                </TD>
+                <TD numeric className="hidden lg:table-cell">
+                  {client.awaitingPayment > 0 ? formatMoney(client.awaitingPayment) : "—"}
+                </TD>
+                <TD className="text-muted-foreground hidden text-xs whitespace-nowrap xl:table-cell">
+                  {client.lastWorkedDate ?? "—"}
+                </TD>
+                <TD className="hidden sm:table-cell">
+                  <Badge variant={client.status === "archived" ? "muted" : "outline"}>
+                    {STATUS_LABELS[client.status] ?? client.status}
+                  </Badge>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+
+          {withTotals && clients.length > 1 ? (
+            <TFoot>
+              <tr>
+                <TD className="metric-label">Total</TD>
+                <TD numeric className="text-muted-foreground">
+                  —
+                </TD>
+                <TD numeric className="hidden md:table-cell">
+                  {totals.days.toLocaleString("fr-FR")}
+                </TD>
+                <TD numeric>{formatMoneyShort(totals.yearRevenue)}</TD>
+                <TD numeric className={cn(totals.toInvoice > 0 && "text-warning")}>
+                  {formatMoney(totals.toInvoice)}
+                </TD>
+                <TD numeric className="hidden lg:table-cell">
+                  {formatMoney(totals.awaitingPayment)}
+                </TD>
+                <TD className="hidden xl:table-cell" />
+                <TD className="hidden sm:table-cell" />
+              </tr>
+            </TFoot>
+          ) : null}
+        </Table>
+      </TableWrap>
+    </Card>
   );
 }

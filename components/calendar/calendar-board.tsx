@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatMoneyShort } from "@/lib/money";
 import {
@@ -283,24 +284,30 @@ export function CalendarBoard({
     );
   }
 
+  // Cases vides de fin de mois : sans elles, la dernière ligne de la grille
+  // s'arrête au milieu et le filet vertical reste en suspens.
+  const trailing = (7 - ((leading + totalDays) % 7)) % 7;
+
+  const controlClass = "border-input bg-card h-8 rounded-(--radius-control) border px-2 text-sm";
+
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-wrap items-center gap-3 p-3">
-        <div className="flex items-center gap-1">
+    <div className="flex flex-col gap-3">
+      <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-2">
+        <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label="Mois précédent"
             onClick={() => goToMonth(-1)}
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-40 text-center text-sm font-medium capitalize">
+          <span className="min-w-36 text-center text-sm font-medium capitalize">
             {formatMonthLabel(year, month)}
           </span>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label="Mois suivant"
             onClick={() => goToMonth(1)}
           >
@@ -309,24 +316,35 @@ export function CalendarBoard({
           <Button variant="ghost" size="sm" onClick={() => router.push("/calendrier")}>
             Aujourd&apos;hui
           </Button>
-          {pending ? <Loader2 className="text-muted-foreground size-4 animate-spin" /> : null}
+          {pending ? (
+            <Loader2 className="text-muted-foreground ml-1 size-3.5 animate-spin" />
+          ) : null}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Client actif"
-            value={activeClientId ?? ""}
-            onChange={(event) => setActiveClientId(event.target.value)}
-            className="border-input bg-card h-9 rounded-lg border px-3 text-sm shadow-xs"
-          >
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          {/* La pastille rappelle à qui les prochains clics seront rattachés :
+              c'est l'erreur la plus facile à commettre sur cet écran. */}
+          <span className="border-input bg-card flex h-8 items-center gap-2 rounded-(--radius-control) border pr-2 pl-2">
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: activeClient?.color ?? "var(--muted-foreground)" }}
+            />
+            <select
+              aria-label="Client actif"
+              value={activeClientId ?? ""}
+              onChange={(event) => setActiveClientId(event.target.value)}
+              className="bg-card -mr-1 text-sm outline-none"
+            >
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </span>
 
-          <div className="border-input flex overflow-hidden rounded-lg border">
+          <div className="border-input flex h-8 overflow-hidden rounded-(--radius-control) border">
             {[1, 0.5].map((value) => (
               <button
                 key={value}
@@ -334,8 +352,10 @@ export function CalendarBoard({
                 onClick={() => setFraction(value)}
                 aria-pressed={fraction === value}
                 className={cn(
-                  "px-3 py-1.5 text-xs transition-colors",
-                  fraction === value ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                  "px-2.5 text-xs transition-colors",
+                  fraction === value
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted",
                 )}
               >
                 {value === 1 ? "Journée" : "½ journée"}
@@ -347,7 +367,7 @@ export function CalendarBoard({
             aria-label="Type de journée"
             value={dayType}
             onChange={(event) => setDayType(event.target.value)}
-            className="border-input bg-card h-9 rounded-lg border px-3 text-sm shadow-xs"
+            className={controlClass}
           >
             {DAY_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -358,16 +378,21 @@ export function CalendarBoard({
         </div>
       </Card>
 
-      <Card className="p-3">
-        <div className="grid grid-cols-7 gap-1.5">
+      {/* La grille est un seul objet : le fond porte les filets (`gap-px` sur un
+          fond de bordure) et chaque case repose dessus. Trente-cinq cartes
+          bordées séparément produisaient trente-cinq rectangles concurrents. */}
+      <Card className="overflow-hidden">
+        <div className="border-border grid grid-cols-7 border-b">
           {WEEKDAYS.map((label) => (
-            <div key={label} className="text-muted-foreground pb-1 text-center text-xs font-medium">
+            <div key={label} className="metric-label py-2 text-center">
               {label}
             </div>
           ))}
+        </div>
 
+        <div className="bg-border grid grid-cols-7 gap-px">
           {Array.from({ length: leading }, (_, index) => (
-            <div key={`blank-${index}`} />
+            <div key={`blank-${index}`} className="bg-muted/20 min-h-16" />
           ))}
 
           {dates.map((date) => {
@@ -410,72 +435,105 @@ export function CalendarBoard({
                     .join("\n") || undefined
                 }
                 className={cn(
-                  "flex min-h-16 flex-col gap-1 rounded-lg border p-1.5 text-left transition-colors select-none",
-                  weekend || holiday ? "bg-muted/60" : "bg-card hover:bg-muted/50",
-                  selected ? "border-primary ring-primary ring-1" : "border-border",
-                  isToday && !selected ? "border-primary/60" : "",
+                  "relative flex min-h-16 flex-col gap-1 p-1.5 text-left transition-colors select-none",
+                  weekend || holiday ? "bg-muted/50" : "bg-card",
+                  selected ? "bg-accent ring-ring z-10 ring-1 ring-inset" : "hover:bg-muted/40",
                 )}
               >
-                <span
-                  className={cn(
-                    "tabular text-xs",
-                    isToday ? "text-primary font-semibold" : "text-muted-foreground",
-                  )}
-                >
-                  {Number(date.slice(8, 10))}
-                  {holiday ? <span className="ml-1 text-[10px]">•</span> : null}
+                <span className="flex items-center gap-1">
+                  {/* Aujourd'hui : une pastille pleine plutôt qu'une bordure de
+                      case — la bordure entrait en concurrence avec celle de la
+                      sélection, on ne distinguait plus les deux états. */}
+                  <span
+                    className={cn(
+                      "tabular flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs",
+                      isToday
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {Number(date.slice(8, 10))}
+                  </span>
+                  {holiday ? (
+                    <span className="text-subtle-foreground truncate text-[10px]">{holiday}</span>
+                  ) : null}
                 </span>
 
                 <span className="flex flex-1 flex-col justify-end gap-0.5">
-                  {dayEntries.map((entry) => (
-                    <span
-                      key={entry.id}
-                      className={cn(
-                        "block min-h-3 truncate rounded px-1 py-0.5 text-[10px] font-medium text-white",
-                        entry.type !== "billable" && "opacity-60",
-                      )}
-                      style={{
-                        backgroundColor: entry.color ?? "#94a3b8",
-                        width: entry.fraction === 0.5 ? "60%" : "100%",
-                      }}
-                    >
-                      {entry.fraction === 0.5 ? "½ " : ""}
-                      {/* Sur téléphone la case est trop étroite pour un nom : la
-                          couleur et le montant suffisent à identifier le client. */}
-                      <span className="hidden sm:inline">{entry.clientName ?? "—"}</span>
-                    </span>
-                  ))}
+                  {dayEntries.map((entry) => {
+                    const color = entry.color ?? "var(--muted-foreground)";
+                    return (
+                      <span
+                        key={entry.id}
+                        className={cn(
+                          "flex min-h-4 items-stretch gap-1 overflow-hidden rounded-[3px]",
+                          entry.type !== "billable" && "opacity-70",
+                        )}
+                        style={{
+                          // Fond teinté + filet de couleur : le nom du client
+                          // reste lu en encre normale, là où l'aplat saturé
+                          // imposait du blanc sur huit teintes de luminosité
+                          // très différentes.
+                          backgroundColor: `color-mix(in oklab, ${color} 16%, transparent)`,
+                          width: entry.fraction === 0.5 ? "62%" : "100%",
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          className="w-0.5 shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="truncate py-px pr-1 text-[10px] font-medium">
+                          {entry.fraction === 0.5 ? "½ " : ""}
+                          {/* Sur téléphone la case est trop étroite pour un nom :
+                              la couleur et le montant suffisent. */}
+                          <span className="hidden sm:inline">{entry.clientName ?? "—"}</span>
+                        </span>
+                      </span>
+                    );
+                  })}
                 </span>
 
                 {dayRevenue > 0 ? (
-                  <span className="tabular text-muted-foreground text-[10px]">
+                  <span className="tabular text-muted-foreground text-right text-[10px]">
                     {formatMoneyShort(dayRevenue)}
                   </span>
                 ) : null}
               </button>
             );
           })}
+
+          {Array.from({ length: trailing }, (_, index) => (
+            <div key={`trailing-${index}`} className="bg-muted/20 min-h-16" />
+          ))}
         </div>
       </Card>
 
-      <Card className="flex flex-wrap items-center gap-x-8 gap-y-3 p-4">
-        <Total
-          label="Jours travaillés"
-          value={worked.toLocaleString("fr-FR")}
-          testId="total-days"
-        />
-        <Total label="CA du mois" value={formatMoney(revenue)} testId="total-revenue" />
-        <Total
-          label="Taux d'occupation"
-          value={`${Math.round(occupancy * 100)} %`}
-          hint={`${businessDays} jours ouvrés`}
-          testId="total-occupancy"
-        />
+      <Card>
+        <div className="divide-border border-border grid grid-cols-2 gap-px divide-x-0 sm:grid-cols-3 sm:divide-x">
+          <Total
+            label="Jours travaillés"
+            value={worked.toLocaleString("fr-FR")}
+            testId="total-days"
+          />
+          <Total label="CA du mois" value={formatMoney(revenue)} testId="total-revenue" />
+          <Total
+            label="Taux d'occupation"
+            value={`${Math.round(occupancy * 100)} %`}
+            hint={`sur ${businessDays} jours ouvrés`}
+            testId="total-occupancy"
+          />
+        </div>
+
         {perClient.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="border-border flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-4 py-2.5">
             {perClient.map((client) => (
               <span key={client.name} className="flex items-center gap-1.5 text-xs">
-                <span className="size-2 rounded-full" style={{ backgroundColor: client.color }} />
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: client.color }}
+                />
                 {client.name}
                 <span className="tabular text-muted-foreground">
                   {client.days.toLocaleString("fr-FR")} j · {formatMoneyShort(client.revenue)}
@@ -486,9 +544,20 @@ export function CalendarBoard({
         ) : null}
       </Card>
 
-      <p className="text-muted-foreground text-xs">
-        Clic = {fraction === 0.5 ? "demi-journée" : "journée"} · Maj+clic = demi-journée ·
-        clic-glissé = plage de jours · ← / → = mois précédent / suivant
+      <p className="text-subtle-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <span className="flex items-center gap-1">
+          <Kbd>Clic</Kbd> {fraction === 0.5 ? "demi-journée" : "journée"}
+        </span>
+        <span className="flex items-center gap-1">
+          <Kbd>Maj</Kbd>+<Kbd>Clic</Kbd> demi-journée
+        </span>
+        <span className="flex items-center gap-1">
+          <Kbd>Clic-glissé</Kbd> plage de jours
+        </span>
+        <span className="flex items-center gap-1">
+          <Kbd>←</Kbd>
+          <Kbd>→</Kbd> mois précédent / suivant
+        </span>
       </p>
     </div>
   );
@@ -506,12 +575,12 @@ function Total({
   testId?: string;
 }) {
   return (
-    <div>
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="tabular text-lg font-semibold" data-testid={testId}>
+    <div className="px-4 py-3">
+      <p className="metric-label">{label}</p>
+      <p className="tabular mt-1 text-lg font-semibold" data-testid={testId}>
         {value}
       </p>
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+      {hint ? <p className="text-subtle-foreground mt-0.5 text-xs">{hint}</p> : null}
     </div>
   );
 }

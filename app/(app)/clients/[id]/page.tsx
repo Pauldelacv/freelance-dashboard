@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge, ColorDot } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClientFormDialog } from "@/components/clients/client-form-dialog";
@@ -46,15 +46,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </Button>
       </div>
 
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span
-            className="size-4 rounded-full"
-            style={{ backgroundColor: client.color }}
-            aria-hidden
-          />
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{client.name}</h1>
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2.5">
+          {/* Même échelle que `PageHeader` : sur une application dense, le titre
+              d'écran ne doit pas changer de taille d'une page à l'autre. */}
+          <ColorDot color={client.color} className="size-2.5" />
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold">{client.name}</h1>
             <p className="text-muted-foreground text-sm">
               {[client.company, client.email, client.phone].filter(Boolean).join(" · ") ||
                 "Aucun contact renseigné"}
