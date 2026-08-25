@@ -27,8 +27,8 @@ export const viewport: Viewport = {
   // sur iPhone en mode application installée.
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfbfd" },
-    { media: "(prefers-color-scheme: dark)", color: "#181a20" },
+    { media: "(prefers-color-scheme: light)", color: "#f8f9fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#16181d" },
   ],
 };
 

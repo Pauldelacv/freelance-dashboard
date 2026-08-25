@@ -6,7 +6,7 @@ export function Input({ className, type, ...props }: React.InputHTMLAttributes<H
     <input
       type={type}
       className={cn(
-        "border-input bg-card h-9 w-full rounded-lg border px-3 py-1 text-sm shadow-xs transition-colors",
+        "border-input bg-card h-8 w-full rounded-(--radius-control) border px-2.5 text-sm transition-colors",
         "placeholder:text-muted-foreground focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
