@@ -54,3 +54,7 @@ SEED_DEMO=1 npm run db:seed
 - **Réglages** — objectifs, fiscalité, lien Indy, export CSV et sauvegarde JSON.
 
 Interface en français, montants en euros, mode sombre, installable en PWA.
+
+
+<img width="1440" height="788" alt="Capture d’écran 2026-08-25 à 21 04 17" src="https://github.com/user-attachments/assets/ff4ed144-4ee3-4a96-8b40-a99f0c80869e" />
+
