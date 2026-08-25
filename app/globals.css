@@ -1,0 +1,197 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Charte visuelle
+   ---------------------------------------------------------------------------
+   Principe directeur : **l'interface est en niveaux de gris, la couleur
+   appartient aux données.** Le châssis (barre latérale, cartes, boutons,
+   bordures) est neutre ; la couleur est réservée à ce qui porte un sens —
+   l'état d'une somme (à facturer / facturé / encaissé) et l'identité d'un
+   client (`lib/colors.ts`).
+
+   Conséquence pratique : la teinte de marque ne doit jamais entrer en
+   concurrence avec le bleu de dataviz (#2a78d6). `--primary` est donc une
+   encre ardoise nettement plus sombre et deux fois moins saturée : lisible en
+   texte de lien, sobre en aplat de bouton, jamais confondue avec une série.
+--------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-elevated: var(--elevated);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* Statuts. La variante `-soft` est un fond ; la variante nue est une encre
+     dont le contraste sur fond de carte tient le 4,5:1. */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --radius-card: 0.625rem;
+  --radius-control: 0.4375rem;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+:root {
+  --background: oklch(0.977 0.0025 265);
+  --foreground: oklch(0.205 0.014 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.014 265);
+  --elevated: oklch(1 0 0);
+  --muted: oklch(0.958 0.004 265);
+  --muted-foreground: oklch(0.505 0.013 265);
+  --subtle-foreground: oklch(0.632 0.011 265);
+  --border: oklch(0.909 0.005 265);
+  --border-strong: oklch(0.855 0.007 265);
+  --input: oklch(0.909 0.005 265);
+  --ring: oklch(0.55 0.13 255);
+  --primary: oklch(0.375 0.062 258);
+  --primary-foreground: oklch(0.99 0.001 265);
+  --accent: oklch(0.945 0.006 262);
+  --accent-foreground: oklch(0.28 0.032 262);
+
+  --success: oklch(0.5 0.115 158);
+  --success-soft: oklch(0.955 0.032 158);
+  --warning: oklch(0.52 0.115 62);
+  --warning-soft: oklch(0.958 0.038 68);
+  --danger: oklch(0.53 0.19 25);
+  --danger-soft: oklch(0.958 0.03 25);
+
+  --shadow-overlay: 0 16px 48px -12px oklch(0.2 0.02 265 / 0.28);
+}
+
+.dark {
+  --background: oklch(0.168 0.007 265);
+  --foreground: oklch(0.955 0.003 265);
+  --card: oklch(0.202 0.008 265);
+  --card-foreground: oklch(0.955 0.003 265);
+  --elevated: oklch(0.228 0.009 265);
+  --muted: oklch(0.268 0.01 265);
+  --muted-foreground: oklch(0.675 0.012 265);
+  --subtle-foreground: oklch(0.552 0.011 265);
+  --border: oklch(0.295 0.011 265);
+  --border-strong: oklch(0.365 0.013 265);
+  --input: oklch(0.295 0.011 265);
+  --ring: oklch(0.68 0.125 255);
+  --primary: oklch(0.74 0.085 255);
+  --primary-foreground: oklch(0.17 0.01 265);
+  --accent: oklch(0.305 0.018 262);
+  --accent-foreground: oklch(0.93 0.014 262);
+
+  --success: oklch(0.72 0.13 158);
+  --success-soft: oklch(0.278 0.045 158);
+  --warning: oklch(0.78 0.13 68);
+  --warning-soft: oklch(0.288 0.045 68);
+  --danger: oklch(0.7 0.17 25);
+  --danger-soft: oklch(0.288 0.055 25);
+
+  --shadow-overlay: 0 16px 48px -12px oklch(0 0 0 / 0.6);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* `cv11` désambiguïse le 1 / l ; `ss01` donne un « a » à simple étage sur
+       les fontes système qui le proposent. Sans effet ailleurs. */
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Le focus doit rester visible : l'application se pilote beaucoup au clavier. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--ring) 26%, transparent);
+  }
+
+  /* Titres : un cran de resserrement, l'échelle typographique est courte et il
+     faut que la hiérarchie se lise à la graisse et à la taille, pas au blanc. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.014em;
+  }
+
+  /* Barres de défilement discrètes : l'écran est dense, elles ne doivent pas
+     ajouter de contraste. */
+  @supports (scrollbar-width: thin) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
+    }
+  }
+}
+
+@layer utilities {
+  /* Chiffres alignés dans les colonnes de montants. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Libellé de métrique : petit, en capitales, espacé. Il doit se distinguer
+     de sa valeur par la forme, pas seulement par la couleur. */
+  .metric-label {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .shadow-overlay {
+    box-shadow: var(--shadow-overlay);
+  }
+}
+
+/* Respect de « réduire les animations » : l'application n'a aucune animation
+   porteuse de sens, tout peut être coupé sans perte. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

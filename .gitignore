@@ -1,0 +1,24 @@
+node_modules/
+.next/
+out/
+build/
+generated/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environnement — jamais de secret dans le dépôt
+.env
+.env.local
+.env*.local
+
+# Base de données locale
+prisma/*.db
+prisma/*.db-journal
+data/
+
+.DS_Store
+*.log
+coverage/
+playwright-report/
+test-results/
+.e2e-run/
