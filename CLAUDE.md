@@ -20,20 +20,21 @@ Principe directeur : **rapide à utiliser au quotidien** (2 clics pour cocher un
 
 ## 2. Stack technique
 
-| Couche | Choix | Pourquoi |
-|---|---|---|
-| Framework | **Next.js 15** (App Router, Server Actions) + TypeScript | Un seul process front+back, build Docker standalone, parfait pour Coolify |
-| UI | **Tailwind CSS v4** + **shadcn/ui** + lucide-react | Composants sobres, dark mode natif |
-| Graphiques | **Recharts** | Léger, suffisant pour CA / jours |
-| Calendrier | Grille mensuelle **maison** (pas de lib lourde) | Le besoin = cocher des cases, pas gérer des events |
-| Base de données | **SQLite** + volume persistant *(validé)* | 1 fichier = 1 backup, zéro service supplémentaire sur le VPS |
-| ORM | **Prisma** | Migrations propres, changement SQLite→Postgres = 1 ligne |
-| Auth | Session cookie signée, **mot de passe unique** hashé (argon2) en variable d'env | Mono-utilisateur, pas besoin de NextAuth |
-| Dates | **date-fns** + `Europe/Paris` | Pas de dérive de fuseau sur les jours |
-| Tests | Vitest (logique métier : calculs CA, charges, jours) + Playwright (parcours critiques) | On teste les calculs, pas le CSS |
-| Qualité | ESLint + Prettier + `tsc --noEmit` | Lancés en CI et avant chaque commit |
+| Couche          | Choix                                                                                  | Pourquoi                                                                  |
+| --------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Framework       | **Next.js 15** (App Router, Server Actions) + TypeScript                               | Un seul process front+back, build Docker standalone, parfait pour Coolify |
+| UI              | **Tailwind CSS v4** + **shadcn/ui** + lucide-react                                     | Composants sobres, dark mode natif                                        |
+| Graphiques      | **Recharts**                                                                           | Léger, suffisant pour CA / jours                                          |
+| Calendrier      | Grille mensuelle **maison** (pas de lib lourde)                                        | Le besoin = cocher des cases, pas gérer des events                        |
+| Base de données | **SQLite** + volume persistant _(validé)_                                              | 1 fichier = 1 backup, zéro service supplémentaire sur le VPS              |
+| ORM             | **Prisma 7** + driver adapter `better-sqlite3`                                         | Migrations propres, changement SQLite→Postgres = 1 adapter                |
+| Auth            | Session cookie signée, **mot de passe unique** hashé (argon2) en variable d'env        | Mono-utilisateur, pas besoin de NextAuth                                  |
+| Dates           | **date-fns** + `Europe/Paris`                                                          | Pas de dérive de fuseau sur les jours                                     |
+| Tests           | Vitest (logique métier : calculs CA, charges, jours) + Playwright (parcours critiques) | On teste les calculs, pas le CSS                                          |
+| Qualité         | ESLint + Prettier + `tsc --noEmit`                                                     | Lancés en CI et avant chaque commit                                       |
 
 ### Règles de code
+
 - **Argent stocké en centimes (`Int`)**, jamais en float. Formatage à l'affichage uniquement (`Intl.NumberFormat('fr-FR')`).
 - **Dates de jour stockées en `String` ISO `YYYY-MM-DD`**, pas en `DateTime` — évite tout décalage UTC sur « le 1er du mois ».
 - Toute mutation passe par une **Server Action** validée avec **Zod**.
@@ -150,7 +151,8 @@ model Setting {
 
 ## 4. Fonctionnalités
 
-### 4.1 Calendrier des jours travaillés — *cœur du produit*
+### 4.1 Calendrier des jours travaillés — _cœur du produit_
+
 - Grille mensuelle, navigation mois précédent/suivant, raccourcis clavier `←`/`→`.
 - **Clic sur un jour = coché/décoché** avec le client actif (sélecteur en haut). **Shift+clic** = demi-journée. **Clic-glissé** = cocher une plage.
 - Pastille de couleur du client, montant du jour affiché au survol.
@@ -160,37 +162,44 @@ model Setting {
 - Vue annuelle « heatmap » en lecture seule.
 
 ### 4.2 Clients & TJM
+
 - CRUD client : nom, société, contact, **TJM par défaut**, couleur, délai de paiement, statut, notes.
 - Missions rattachées avec TJM spécifique qui écrase celui du client.
 - Fiche client : CA total, CA de l'année, jours travaillés, TJM moyen réel, montant à facturer et encaissements attendus.
 - Le TJM est **figé sur chaque `WorkDay`** à la saisie : changer le TJM d'un client ne réécrit pas l'historique.
 
 ### 4.3 Facturation → **Indy** (externe)
+
 Aucun moteur de facturation dans l'application : **Indy reste la source de vérité** comptable et fiscale.
 Ce que le dashboard fait à la place, en restant minimal :
+
 - **Lien direct vers Indy** dans la barre de navigation et sur chaque fiche client.
-- Chaque `WorkDay` porte un statut de facturation : *à facturer → facturé → encaissé*.
+- Chaque `WorkDay` porte un statut de facturation : _à facturer → facturé → encaissé_.
 - Action **« Clôturer le mois »** sur une fiche client : marque d'un coup tous les jours de la période comme facturés, avec un récapitulatif copiable (nombre de jours, TJM, total HT) à coller dans Indy.
 - Le dashboard affiche donc en permanence : **à facturer**, **facturé non encaissé**, **encaissé** — sans jamais dupliquer une facture.
 
 ### 4.4 Finances
+
 - CA **prévisionnel** (jours cochés à facturer) vs **facturé** vs **encaissé**.
 - Graphiques : CA mensuel sur 12 mois, répartition par client, évolution du TJM moyen réel.
 - Suivi des dépenses et estimation des charges : **module optionnel désactivé par défaut** (Indy le fait déjà). Activable dans les réglages si le besoin apparaît.
 
 ### 4.5 Veille — annuaire de liens
+
 - Liste des sites : titre, URL, catégorie, tags, favicon récupéré automatiquement, favori.
 - Filtres par catégorie/tag, recherche, tri, vue **liste dense** ou **cartes**.
 - Ajout rapide : coller une URL, le titre et le favicon sont récupérés automatiquement.
 - Marquage de la dernière visite pour repérer les sites délaissés.
 - Import/export de la liste en JSON (et OPML pour récupérer un export de lecteur existant).
-- *Pas de lecteur RSS* — décision validée, on reste sur un annuaire.
+- _Pas de lecteur RSS_ — décision validée, on reste sur un annuaire.
 
 ### 4.6 Objectifs & KPI (page d'accueil)
+
 Bandeau de tuiles : CA du mois vs objectif · jours travaillés vs objectif · TJM moyen · taux d'occupation · **à facturer** · **encaissements attendus ce mois-ci**.
 En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à relancer.
 
 ### 4.7 Confort
+
 - **Dark mode** (défaut système).
 - **PWA** installable sur mobile — cocher ses jours depuis le téléphone.
 - Recherche globale `⌘K` (clients, missions, prospects, sites).
@@ -202,23 +211,27 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 ## 5. Modules retenus pour la v1
 
 ### 5.1 Simulateur de TJM
+
 « Pour **X € net par mois**, en travaillant **Y jours**, il me faut un TJM de **Z**. »
+
 - Curseurs : revenu net visé, jours travaillés par mois, taux de charges, semaines de congés par an.
 - **Paramètres par défaut : 26,1 % de cotisations, non assujetti à la TVA** — donc CA facturé = CA encaissé, aucune TVA à collecter ni à provisionner. Les montants affichés dans toute l'application sont des montants **HT = TTC**.
 - Le taux de charges est stocké dans `Setting` (clé `tax`), jamais en dur dans le code : un changement de régime ou de taux se fait depuis les réglages, sans redéploiement.
-- Calcul dans les deux sens : *objectif de net → TJM requis*, et *TJM actuel → net estimé*.
+- Calcul dans les deux sens : _objectif de net → TJM requis_, et _TJM actuel → net estimé_.
 - Comparaison avec le **TJM moyen réel** constaté sur les 12 derniers mois : l'écart est affiché explicitement.
 - Logique isolée dans `lib/calculations/rate-simulator.ts`, couverte par des tests unitaires.
 
 ### 5.2 Pipeline prospects
+
 - Vue **kanban** : Contacté → Devis envoyé → Gagné / Perdu, glisser-déposer entre colonnes.
 - Par prospect : TJM pressenti, jours estimés, probabilité, **valeur pondérée** (TJM × jours × probabilité).
 - Total pondéré du pipeline affiché en tête de colonne.
 - Relances : champ « prochaine action + date », les prospects en retard remontent sur le dashboard.
-- Un prospect *Gagné* se convertit en **client** en un clic, en reprenant ses informations.
+- Un prospect _Gagné_ se convertit en **client** en un clic, en reprenant ses informations.
 
 ### 5.3 Prévisionnel de trésorerie (3 mois)
-- Alimenté par les `WorkDay` : les jours *à facturer* deviennent des encaissements attendus à `fin de mois + délai de paiement du client`, les jours *facturés* à `date de facture + délai`.
+
+- Alimenté par les `WorkDay` : les jours _à facturer_ deviennent des encaissements attendus à `fin de mois + délai de paiement du client`, les jours _facturés_ à `date de facture + délai`.
 - Courbe des encaissements attendus semaine par semaine sur 12 semaines, empilée par client.
 - Distinction visuelle entre **certain** (déjà facturé dans Indy) et **probable** (jours travaillés pas encore facturés).
 - Option : inclure le pipeline pondéré en zone hachurée, pour voir le creux à venir.
@@ -235,13 +248,16 @@ devis · suivi du temps horaire · journal hebdomadaire de mission · widget « 
 Contrainte : **déploiement en quelques clics**, sans configuration exotique.
 
 ### Livrables d'infra
-- `Dockerfile` multi-stage (deps → build → runner), Next.js en `output: "standalone"`, image finale Node 22 Alpine, utilisateur non-root.
+
+- `Dockerfile` multi-stage (deps → build → runner) **à la racine** (emplacement attendu par défaut par Coolify), Next.js en `output: "standalone"`, utilisateur non-root.
+- Image finale **Node 22 Debian slim** et non Alpine : les binaires précompilés de `better-sqlite3` et de Prisma ciblent la glibc. Alpine imposerait une compilation native à chaque build.
 - `docker-compose.yml` pour tester en local à l'identique.
 - `.env.example` documenté.
-- Route `GET /api/health` renvoyant `{ ok: true }` → **healthcheck Coolify**.
-- Migrations Prisma appliquées **au démarrage du conteneur** (`prisma migrate deploy`) : un redéploiement suffit, aucune commande manuelle.
+- Route `GET /api/health` renvoyant `{ ok: true }` → **healthcheck Coolify**, sans session ni accès base.
+- Migrations appliquées **au démarrage du conteneur** par `scripts/migrate.mjs` : un redéploiement suffit, aucune commande manuelle. Ce script remplace `prisma migrate deploy`, qui exigerait d'embarquer ~150 Mo de CLI Prisma (Studio compris) dans l'image ; il écrit dans `_prisma_migrations` au format exact de Prisma (checksum = sha256 du `migration.sql`), donc `prisma migrate status` reste juste en local. Une migration déjà appliquée puis modifiée fait échouer le démarrage au lieu de corrompre la base.
 
 ### Variables d'environnement
+
 ```
 APP_PASSWORD_HASH=   # hash argon2 du mot de passe (script fourni : npm run hash-password)
 SESSION_SECRET=      # 32+ caractères aléatoires
@@ -251,10 +267,12 @@ NEXT_PUBLIC_APP_URL=https://dashboard.mon-domaine.fr
 ```
 
 ### Volume persistant
+
 `/data` → volume Coolify. Contient la base SQLite et les PDF générés. **C'est le seul chemin à sauvegarder.**
 
 ### Procédure Coolify
-1. Nouvelle ressource → *Application* → dépôt Git, branche `main`.
+
+1. Nouvelle ressource → _Application_ → dépôt Git, branche `main`.
 2. Build pack : **Dockerfile**.
 3. Port exposé : `3000`. Healthcheck : `/api/health`.
 4. Ajouter le volume persistant `/data`.
@@ -283,11 +301,15 @@ components/
   ui/                     # shadcn
   calendar/ clients/ invoices/ watch/ charts/
 lib/
-  db.ts  auth.ts  money.ts  dates.ts  holidays.ts
+  db.ts  auth.ts  session.ts  settings.ts  money.ts  dates.ts  holidays.ts  utils.ts
   calculations/           # CA, charges, taux d'occupation — testé unitairement
+  queries/                # lectures Prisma agrégées pour les pages
 prisma/
   schema.prisma  migrations/  seed.ts
-docker/  Dockerfile  docker-compose.yml
+generated/prisma/         # client Prisma généré (hors dépôt)
+scripts/
+  hash-password.ts  migrate.mjs
+Dockerfile  docker-compose.yml  docker/entrypoint.sh
 DEPLOY.md
 ```
 
@@ -295,15 +317,15 @@ DEPLOY.md
 
 ## 8. Plan de développement
 
-| Phase | Contenu | Résultat |
-|---|---|---|
-| **0 — Socle** | Next.js + Tailwind + shadcn + Prisma/SQLite + auth + Dockerfile + healthcheck + `DEPLOY.md` | **Déployable sur Coolify dès la fin de la phase 0** |
-| **1 — Cœur** | Clients + TJM, calendrier des jours travaillés, calculs de CA, statuts de facturation, dashboard KPI | Utilisable au quotidien |
-| **2 — Veille** | Annuaire de sites, catégories, tags, favoris, import/export | |
-| **3 — Simulateur de TJM** | Calcul dans les deux sens + comparaison au TJM réel | |
-| **4 — Pipeline prospects** | Kanban, valeur pondérée, relances, conversion en client | |
-| **5 — Trésorerie** | Prévisionnel 12 semaines, graphiques CA, objectifs | |
-| **6 — Confort** | PWA, `⌘K`, dark mode, export CSV + backup JSON | |
+| Phase                      | Contenu                                                                                              | Résultat                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **0 — Socle**              | Next.js + Tailwind + shadcn + Prisma/SQLite + auth + Dockerfile + healthcheck + `DEPLOY.md`          | **Déployable sur Coolify dès la fin de la phase 0** |
+| **1 — Cœur**               | Clients + TJM, calendrier des jours travaillés, calculs de CA, statuts de facturation, dashboard KPI | Utilisable au quotidien                             |
+| **2 — Veille**             | Annuaire de sites, catégories, tags, favoris, import/export                                          |                                                     |
+| **3 — Simulateur de TJM**  | Calcul dans les deux sens + comparaison au TJM réel                                                  |                                                     |
+| **4 — Pipeline prospects** | Kanban, valeur pondérée, relances, conversion en client                                              |                                                     |
+| **5 — Trésorerie**         | Prévisionnel 12 semaines, graphiques CA, objectifs                                                   |                                                     |
+| **6 — Confort**            | PWA, `⌘K`, dark mode, export CSV + backup JSON                                                       |                                                     |
 
 Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, testée et déployable.
 
@@ -312,6 +334,7 @@ Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, te
 ## 9. Décisions prises / points restants
 
 **Validé le 25/08/2026 :**
+
 - Base de données : **SQLite**.
 - Facturation : **externalisée dans Indy**, simple lien + statuts de facturation côté dashboard.
 - Veille : **annuaire de liens**, sans lecteur RSS.
@@ -319,6 +342,7 @@ Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, te
 - Régime fiscal : **26,1 % de cotisations**, **non assujetti à la TVA** (franchise en base, art. 293 B du CGI). Valeurs par défaut du simulateur, modifiables dans les réglages.
 
 **Reste à préciser (n'empêche pas de démarrer les phases 0 à 2) :**
+
 1. **Format de TJM** : uniquement journalier, ou aussi horaire / forfait mission ? Par défaut : journalier + demi-journée.
 2. **Nom de domaine** sur le VPS, pour `NEXT_PUBLIC_APP_URL`.
 3. **URL de ton espace Indy**, pour les liens directs (à mettre dans les réglages, pas dans le dépôt).

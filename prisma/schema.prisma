@@ -1,0 +1,146 @@
+// Schéma de la base — voir CLAUDE.md §3.
+// Règles : argent en centimes (Int), dates de jour en String ISO "YYYY-MM-DD".
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Client {
+  id           String   @id @default(cuid())
+  name         String
+  company      String?
+  email        String?
+  phone        String?
+  defaultRate  Int // TJM par défaut, en centimes
+  currency     String   @default("EUR")
+  color        String // pastille couleur dans le calendrier
+  status       String   @default("active") // active | prospect | archived
+  paymentTerms Int      @default(30) // délai de paiement en jours
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  missions Mission[]
+  workDays WorkDay[]
+
+  @@index([status])
+}
+
+model Mission {
+  id            String   @id @default(cuid())
+  clientId      String
+  title         String
+  rate          Int? // TJM spécifique, sinon celui du client
+  startDate     String?
+  endDate       String?
+  estimatedDays Float?
+  status        String   @default("active") // active | done | paused
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workDays WorkDay[]
+
+  @@index([clientId, status])
+}
+
+model WorkDay {
+  id        String   @id @default(cuid())
+  date      String // "2026-08-25"
+  fraction  Float    @default(1) // 1 = journée, 0.5 = demi-journée
+  clientId  String?
+  missionId String?
+  rate      Int // TJM figé au moment de la saisie (historique fiable)
+  type      String   @default("billable") // billable | internal | training | off
+  note      String?
+  billing   String   @default("pending") // pending | invoiced | paid (facture émise dans Indy)
+  billedAt  String? // date de la facture Indy, base du prévisionnel de trésorerie
+  paidAt    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  mission Mission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+
+  @@unique([date, clientId, missionId])
+  @@index([date])
+  @@index([clientId, billing])
+  @@index([billing])
+}
+
+model Prospect {
+  id            String   @id @default(cuid())
+  name          String
+  company       String?
+  email         String?
+  phone         String?
+  source        String? // recommandation | LinkedIn | site | réseau…
+  stage         String   @default("contacted") // contacted | quoted | won | lost
+  estimatedRate Int? // TJM pressenti, en centimes
+  estimatedDays Float?
+  probability   Int      @default(50) // en %
+  nextAction    String?
+  nextActionAt  String?
+  notes         String?
+  clientId      String? // rempli à la conversion en client
+  position      Int      @default(0) // ordre dans la colonne du kanban
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([stage, position])
+  @@index([nextActionAt])
+}
+
+// Optionnel — la comptabilité reste dans Indy. Module activable dans les réglages.
+model Expense {
+  id         String   @id @default(cuid())
+  date       String
+  label      String
+  amount     Int // en centimes
+  category   String // logiciel | matériel | déplacement | formation | compta | autre
+  recurring  Boolean  @default(false)
+  receiptUrl String?
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+}
+
+model WatchSite {
+  id         String   @id @default(cuid())
+  title      String
+  url        String
+  category   String   @default("Divers")
+  tags       String   @default("") // CSV simple
+  frequency  String? // quotidien | hebdo | mensuel
+  favorite   Boolean  @default(false)
+  lastVisit  String?
+  faviconUrl String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([category])
+  @@index([favorite])
+}
+
+model Goal {
+  id            String @id @default(cuid())
+  year          Int
+  month         Int? // null = objectif annuel
+  revenueTarget Int? // en centimes
+  daysTarget    Float?
+
+  @@unique([year, month])
+}
+
+model Setting {
+  key       String   @id
+  value     String // JSON
+  updatedAt DateTime @updatedAt
+}
