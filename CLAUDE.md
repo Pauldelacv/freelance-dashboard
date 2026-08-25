@@ -142,7 +142,7 @@ model Goal {
 
 model Setting {
   key   String @id
-  value String   // JSON : régime fiscal, taux de charges, URL Indy, objectifs par défaut…
+  value String   // JSON. Clés : tax { chargeRate: 0.261, vat: false }, indyUrl, objectifs par défaut…
 }
 ```
 
@@ -195,7 +195,7 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 - **PWA** installable sur mobile — cocher ses jours depuis le téléphone.
 - Recherche globale `⌘K` (clients, missions, prospects, sites).
 - **Export CSV** de toutes les tables + **backup complet JSON** en 1 clic depuis les réglages.
-- Interface en **français**, montants en euros.
+- Interface en **français**, montants en euros, **sans TVA** (mention « TVA non applicable, art. 293 B du CGI » sur les récapitulatifs copiables vers Indy).
 
 ---
 
@@ -203,7 +203,9 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 
 ### 5.1 Simulateur de TJM
 « Pour **X € net par mois**, en travaillant **Y jours**, il me faut un TJM de **Z**. »
-- Curseurs : revenu net visé, jours travaillés par mois, taux de charges (issu du régime fiscal configuré), semaines de congés par an.
+- Curseurs : revenu net visé, jours travaillés par mois, taux de charges, semaines de congés par an.
+- **Paramètres par défaut : 26,1 % de cotisations, non assujetti à la TVA** — donc CA facturé = CA encaissé, aucune TVA à collecter ni à provisionner. Les montants affichés dans toute l'application sont des montants **HT = TTC**.
+- Le taux de charges est stocké dans `Setting` (clé `tax`), jamais en dur dans le code : un changement de régime ou de taux se fait depuis les réglages, sans redéploiement.
 - Calcul dans les deux sens : *objectif de net → TJM requis*, et *TJM actuel → net estimé*.
 - Comparaison avec le **TJM moyen réel** constaté sur les 12 derniers mois : l'écart est affiché explicitement.
 - Logique isolée dans `lib/calculations/rate-simulator.ts`, couverte par des tests unitaires.
@@ -314,12 +316,12 @@ Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, te
 - Facturation : **externalisée dans Indy**, simple lien + statuts de facturation côté dashboard.
 - Veille : **annuaire de liens**, sans lecteur RSS.
 - Modules v1 : **simulateur de TJM**, **pipeline prospects**, **prévisionnel de trésorerie**.
+- Régime fiscal : **26,1 % de cotisations**, **non assujetti à la TVA** (franchise en base, art. 293 B du CGI). Valeurs par défaut du simulateur, modifiables dans les réglages.
 
 **Reste à préciser (n'empêche pas de démarrer les phases 0 à 2) :**
-1. **Régime fiscal et taux de charges** — nécessaire au simulateur de TJM (phase 3). Par défaut : micro-BNC, 26,1 % de cotisations, non assujetti à la TVA ; paramétrable dans les réglages.
-2. **Format de TJM** : uniquement journalier, ou aussi horaire / forfait mission ? Par défaut : journalier + demi-journée.
-3. **Nom de domaine** sur le VPS, pour `NEXT_PUBLIC_APP_URL`.
-4. **URL de ton espace Indy**, pour les liens directs (à mettre dans les réglages, pas dans le dépôt).
+1. **Format de TJM** : uniquement journalier, ou aussi horaire / forfait mission ? Par défaut : journalier + demi-journée.
+2. **Nom de domaine** sur le VPS, pour `NEXT_PUBLIC_APP_URL`.
+3. **URL de ton espace Indy**, pour les liens directs (à mettre dans les réglages, pas dans le dépôt).
 
 ## 10. Conventions pour Claude Code
 
