@@ -14,11 +14,10 @@ export interface CalendarEntry {
   note: string | null;
 }
 
-export async function getMonthEntries(year: number, month: number): Promise<CalendarEntry[]> {
+/** Une seule lecture pour toute la période : les vues n'interrogent jamais mois par mois. */
+async function getEntriesBetween(from: string, to: string): Promise<CalendarEntry[]> {
   const days = await prisma.workDay.findMany({
-    where: {
-      date: { gte: firstDayOfMonth(year, month), lte: lastDayOfMonth(year, month) },
-    },
+    where: { date: { gte: from, lte: to } },
     include: { client: { select: { name: true, color: true } } },
     orderBy: { date: "asc" },
   });
@@ -37,11 +36,11 @@ export async function getMonthEntries(year: number, month: number): Promise<Cale
   }));
 }
 
-/** Jours de l'année pour la vue heatmap annuelle. */
-export async function getYearEntries(year: number) {
-  return prisma.workDay.findMany({
-    where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` } },
-    include: { client: { select: { name: true, color: true } } },
-    orderBy: { date: "asc" },
-  });
+export function getMonthEntries(year: number, month: number): Promise<CalendarEntry[]> {
+  return getEntriesBetween(firstDayOfMonth(year, month), lastDayOfMonth(year, month));
+}
+
+/** Jours de l'année pour la vue heatmap annuelle — 365 jours en une requête. */
+export function getYearEntries(year: number): Promise<CalendarEntry[]> {
+  return getEntriesBetween(`${year}-01-01`, `${year}-12-31`);
 }

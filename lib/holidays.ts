@@ -64,3 +64,10 @@ export function isBusinessDay(iso: string): boolean {
 export function businessDaysInMonth(year: number, month: number): number {
   return monthDates(year, month).filter(isBusinessDay).length;
 }
+
+/** Base du taux d'occupation de la vue annuelle. */
+export function businessDaysInYear(year: number): number {
+  let total = 0;
+  for (let month = 1; month <= 12; month += 1) total += businessDaysInMonth(year, month);
+  return total;
+}

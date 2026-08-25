@@ -98,6 +98,21 @@ test.describe("cœur du produit", () => {
     await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
   });
 
+  test("bascule sur la vue annuelle en lecture seule", async ({ page }) => {
+    await page.goto("/calendrier?m=2026-10");
+    await page.getByRole("link", { name: "Année" }).click();
+
+    await expect(page).toHaveURL(/vue=annee&a=2026/);
+    // Les jours d'octobre remontent dans les totaux de l'année.
+    await expect(page.getByTestId("year-billable-days")).toHaveText("4");
+    await expect(page.getByTestId("year-revenue")).toHaveText("2 400,00 €");
+
+    // Un mois de la grille renvoie vers la vue mensuelle, où l'on saisit.
+    await page.getByRole("link", { name: "octobre" }).click();
+    await expect(page).toHaveURL(/m=2026-10/);
+    await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
+  });
+
   test("clôture un mois et le suit jusqu'à l'encaissement", async ({ page }) => {
     await page.goto("/clients");
     await page.getByRole("button", { name: "Nouveau client" }).first().click();

@@ -1,6 +1,8 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
-import { getMonthEntries } from "@/lib/queries/calendar";
+import { CalendarViewSwitch } from "@/components/calendar/view-switch";
+import { YearHeatmap } from "@/components/calendar/year-heatmap";
+import { getMonthEntries, getYearEntries } from "@/lib/queries/calendar";
 import { listActiveClients } from "@/lib/queries/clients";
 import { getSettings } from "@/lib/settings";
 import { todayIso } from "@/lib/dates";
@@ -21,13 +23,44 @@ function parseMonth(value: string | undefined): { year: number; month: number } 
   return { year, month };
 }
 
+/** "2026" dans l'URL, sinon l'année courante. */
+function parseYear(value: string | undefined, fallback: number): number {
+  if (!value || !/^\d{4}$/.test(value)) return fallback;
+  return Number(value);
+}
+
 export default async function CalendrierPage({
   searchParams,
 }: {
-  searchParams: Promise<{ m?: string }>;
+  searchParams: Promise<{ m?: string; vue?: string; a?: string }>;
 }) {
-  const { m } = await searchParams;
+  const { m, vue, a } = await searchParams;
+  const today = todayIso();
   const { year, month } = parseMonth(m);
+
+  if (vue === "annee") {
+    const displayedYear = parseYear(a, year);
+    // Une seule lecture pour les 365 jours : la vue annuelle n'interroge jamais
+    // la base mois par mois.
+    const entries = await getYearEntries(displayedYear);
+
+    return (
+      <>
+        <PageHeader
+          title="Calendrier"
+          description="Vue annuelle : les creux et les périodes chargées d'un coup d'œil."
+          action={
+            <CalendarViewSwitch
+              view="year"
+              year={displayedYear}
+              month={displayedYear === year ? month : 1}
+            />
+          }
+        />
+        <YearHeatmap year={displayedYear} entries={entries} today={today} />
+      </>
+    );
+  }
 
   const [entries, clients, settings] = await Promise.all([
     getMonthEntries(year, month),
@@ -40,13 +73,14 @@ export default async function CalendrierPage({
       <PageHeader
         title="Calendrier"
         description="Un clic pose une journée pour le client actif. Maj+clic pour une demi-journée."
+        action={<CalendarViewSwitch view="month" year={year} month={month} />}
       />
       <CalendarBoard
         year={year}
         month={month}
         entries={entries}
         clients={clients}
-        today={todayIso()}
+        today={today}
         defaultFraction={settings.workday.defaultFraction}
       />
     </>
