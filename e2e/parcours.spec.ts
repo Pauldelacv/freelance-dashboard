@@ -122,6 +122,36 @@ test.describe("cœur du produit", () => {
     await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
   });
 
+  test("supprime un client sans jour saisi", async ({ page }) => {
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Jetable");
+    await page.getByLabel("TJM (€)").fill("400");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await expect(page.getByRole("link", { name: /Client Jetable/ })).toBeVisible();
+
+    await page.getByRole("button", { name: "Supprimer Client Jetable" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Supprimer définitivement" })
+      .click();
+
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByRole("link", { name: /Client Jetable/ })).toHaveCount(0);
+  });
+
+  test("propose l'archivage plutôt que la suppression d'un client qui porte des jours", async ({
+    page,
+  }) => {
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Supprimer Client Clôture" }).click();
+
+    const boite = page.getByRole("dialog");
+    await expect(boite.getByText(/jours? saisis?/)).toBeVisible();
+    await expect(boite.getByRole("button", { name: "Supprimer définitivement" })).toBeDisabled();
+    await expect(boite.getByRole("button", { name: "Archiver" })).toBeVisible();
+  });
+
   test("enchaîne deux créations sans rouvrir la page", async ({ page }) => {
     // Régression : la boîte de dialogue restait ouverte à la deuxième création,
     // l'état de la Server Action portant déjà ok: true.
