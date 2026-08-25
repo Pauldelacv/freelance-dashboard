@@ -113,17 +113,21 @@ function MonthlyBars({ points }: { points: { key: string; label: string; revenue
   const max = Math.max(...points.map((point) => point.revenue), 1);
 
   return (
-    <div className="flex h-40 items-end gap-1.5">
+    <div className="flex h-40 gap-1.5">
       {points.map((point) => (
-        <div key={point.key} className="flex flex-1 flex-col items-center gap-1.5">
-          <div className="flex h-full w-full items-end">
+        <div key={point.key} className="flex flex-1 flex-col gap-1.5">
+          {/* Conteneur à hauteur définie : sans lui, la hauteur en % de la barre
+              se résoudrait contre une hauteur automatique, donc zéro. */}
+          <div className="relative flex-1">
             <div
-              className="bg-primary/80 w-full rounded-t transition-[height]"
-              style={{ height: `${Math.max(2, (point.revenue / max) * 100)}%` }}
+              className="bg-primary/80 absolute bottom-0 w-full rounded-t"
+              style={{
+                height: `${point.revenue === 0 ? 2 : Math.max(4, (point.revenue / max) * 100)}%`,
+              }}
               title={`${point.label} : ${formatMoney(point.revenue)}`}
             />
           </div>
-          <span className="text-muted-foreground text-[10px]">{point.label}</span>
+          <span className="text-muted-foreground text-center text-[10px]">{point.label}</span>
         </div>
       ))}
     </div>

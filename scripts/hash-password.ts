@@ -28,11 +28,20 @@ async function main() {
   }
 
   const digest = await hash(password);
+  const secret = randomBytes(32).toString("base64url");
 
-  console.log("\nÀ reporter dans les variables d'environnement Coolify :\n");
+  console.log("\n── Coolify (onglet Environment Variables) ─────────────────────\n");
   console.log(`APP_PASSWORD_HASH=${digest}`);
-  console.log(`SESSION_SECRET=${randomBytes(32).toString("base64url")}`);
-  console.log("\n(le SESSION_SECRET ci-dessus est généré au hasard, à ne garder qu'une fois)");
+  console.log(`SESSION_SECRET=${secret}`);
+
+  console.log("\n── Fichier .env local ────────────────────────────────────────\n");
+  console.log(`APP_PASSWORD_HASH=${digest.replaceAll("$", "\\$")}`);
+  console.log(`SESSION_SECRET=${secret}`);
+  console.log(
+    "\nLes $ sont échappés pour le fichier .env : sans cela, dotenv les prend\n" +
+      "pour des variables et vide le hash — la connexion échouerait silencieusement.\n" +
+      "Dans Coolify, coller la valeur brute (premier bloc), sans échappement.\n",
+  );
 }
 
 main().catch((error) => {

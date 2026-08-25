@@ -33,8 +33,17 @@ APP_PASSWORD_HASH=$argon2id$v=19$m=19456,t=2,p=1$...
 SESSION_SECRET=xY3f...
 ```
 
-Gardez-les de côté pour l'étape 4. Le mot de passe en clair n'est stocké nulle part :
-seul son hash argon2 voyage jusqu'au serveur.
+La commande affiche deux blocs : l'un pour Coolify (valeur brute), l'autre pour un
+fichier `.env` local (les `$` y sont échappés). Gardez le premier pour l'étape 4.
+
+> **Le détail qui fait perdre une heure.** Dans un fichier `.env`, un `$` non
+> échappé est interprété comme une variable : le hash arrive vide et la connexion
+> échoue sans explication. Dans Coolify, ce problème n'existe pas — les variables
+> sont de vraies variables d'environnement, on colle la valeur brute. Et le
+> `Dockerfile` n'embarque jamais de `.env` (il est dans `.dockerignore`).
+
+Le mot de passe en clair n'est stocké nulle part : seul son hash argon2 voyage
+jusqu'au serveur.
 
 ---
 
