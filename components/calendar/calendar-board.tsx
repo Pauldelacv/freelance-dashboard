@@ -87,6 +87,8 @@ export function CalendarBoard({
   clients,
   today,
   defaultFraction,
+  revenueTarget,
+  daysTarget,
 }: {
   year: number;
   month: number;
@@ -94,6 +96,9 @@ export function CalendarBoard({
   clients: CalendarClient[];
   today: string;
   defaultFraction: number;
+  /** Objectifs du mois affiché — ceux du mois s'il en porte, sinon les réglages. */
+  revenueTarget: number | null;
+  daysTarget: number | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -514,9 +519,19 @@ export function CalendarBoard({
           <Total
             label="Jours travaillés"
             value={worked.toLocaleString("fr-FR")}
+            hint={daysTarget ? `Objectif ${daysTarget.toLocaleString("fr-FR")} j` : undefined}
             testId="total-days"
           />
-          <Total label="CA du mois" value={formatMoney(revenue)} testId="total-revenue" />
+          <Total
+            label="CA du mois"
+            value={formatMoney(revenue)}
+            hint={
+              revenueTarget
+                ? `Objectif ${formatMoneyShort(revenueTarget)} · ${Math.round((revenue / revenueTarget) * 100)} %`
+                : undefined
+            }
+            testId="total-revenue"
+          />
           <Total
             label="Taux d'occupation"
             value={`${Math.round(occupancy * 100)} %`}

@@ -73,6 +73,10 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
       <Card>
         <CardHeader>
           <CardTitle>Objectifs par défaut</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            Repli des mois qui n&apos;ont pas d&apos;objectif propre. Un objectif de mois se saisit
+            depuis le tableau de bord ou le calendrier, et l&apos;emporte sur ces valeurs.
+          </p>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field

@@ -212,6 +212,24 @@ test.describe("cœur du produit", () => {
     await expect(page.getByRole("link", { name: "Facturation Indy" })).toBeVisible();
   });
 
+  test("donne au mois affiché son propre objectif", async ({ page }) => {
+    await page.goto("/");
+    // Selon qu'un objectif par défaut existe déjà, le point d'entrée s'appelle
+    // « Modifier » ou « en définir un » : c'est la même boîte.
+    await page.getByRole("button", { name: /^(Modifier|en définir un)$/ }).click();
+
+    const boite = page.getByRole("dialog");
+    await boite.locator("#month-revenue").fill("12345");
+    await boite.getByRole("button", { name: "Enregistrer le mois" }).click();
+
+    await expect(page.getByRole("dialog")).toBeHidden();
+    // La jauge suit l'objectif du mois, pas la valeur par défaut des réglages.
+    await expect(page.getByText("Objectif 12 345 €")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText("Objectif 12 345 €")).toBeVisible();
+  });
+
   test("ajoute un site de veille et le filtre", async ({ page }) => {
     await page.goto("/veille");
     await page.getByRole("button", { name: "Ajouter un site" }).first().click();

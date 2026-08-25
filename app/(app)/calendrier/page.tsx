@@ -1,11 +1,13 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { CalendarViewSwitch } from "@/components/calendar/view-switch";
+import { GoalDialog } from "@/components/goals/goal-dialog";
 import { YearHeatmap } from "@/components/calendar/year-heatmap";
 import { getMonthEntries, getYearEntries } from "@/lib/queries/calendar";
 import { listActiveClients } from "@/lib/queries/clients";
+import { getYearGoals } from "@/lib/queries/goals";
 import { getSettings } from "@/lib/settings";
-import { todayIso } from "@/lib/dates";
+import { formatMonthLabel, todayIso } from "@/lib/dates";
 
 export const metadata = { title: "Calendrier" };
 
@@ -62,18 +64,37 @@ export default async function CalendrierPage({
     );
   }
 
-  const [entries, clients, settings] = await Promise.all([
+  const [entries, clients, settings, goals] = await Promise.all([
     getMonthEntries(year, month),
     listActiveClients(),
     getSettings(),
+    getYearGoals(year),
   ]);
+
+  // Objectif du mois affiché, avec repli sur la valeur par défaut des réglages.
+  const monthGoal = goals.byMonth[month] ?? null;
+  const fallback = {
+    revenueTarget: settings.goals.monthlyRevenue,
+    daysTarget: settings.goals.monthlyDays,
+  };
 
   return (
     <>
       <PageHeader
         title="Calendrier"
         description="Un clic pose une journée pour le client actif. Maj+clic pour une demi-journée."
-        action={<CalendarViewSwitch view="month" year={year} month={month} />}
+        action={
+          <>
+            <GoalDialog
+              year={year}
+              month={month}
+              monthLabel={formatMonthLabel(year, month)}
+              goals={goals}
+              fallback={fallback}
+            />
+            <CalendarViewSwitch view="month" year={year} month={month} />
+          </>
+        }
       />
       <CalendarBoard
         year={year}
@@ -82,6 +103,8 @@ export default async function CalendrierPage({
         clients={clients}
         today={today}
         defaultFraction={settings.workday.defaultFraction}
+        revenueTarget={monthGoal?.revenueTarget ?? fallback.revenueTarget}
+        daysTarget={monthGoal?.daysTarget ?? fallback.daysTarget}
       />
     </>
   );

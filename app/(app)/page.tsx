@@ -1,19 +1,43 @@
 import Link from "next/link";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, CircleAlert } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { GoalDialog } from "@/components/goals/goal-dialog";
 import { Metric, MetricRow } from "@/components/dashboard/metric";
 import { RevenueBars } from "@/components/dashboard/revenue-bars";
 import { CashFlowBar } from "@/components/dashboard/cash-flow-bar";
 import { Card, CardBar, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDashboardSummary } from "@/lib/queries/dashboard";
+import { getYearGoals } from "@/lib/queries/goals";
+import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatMoneyShort } from "@/lib/money";
-import { formatMonthLabel } from "@/lib/dates";
+import { formatMonthLabel, todayIso } from "@/lib/dates";
 
 export default async function DashboardPage() {
-  const summary = await getDashboardSummary();
+  const year = Number(todayIso().slice(0, 4));
+  const [summary, goals, settings] = await Promise.all([
+    getDashboardSummary(),
+    getYearGoals(year),
+    getSettings(),
+  ]);
   const monthLabel = formatMonthLabel(summary.year, summary.month);
+
+  // La jauge suit l'objectif du mois affiché ; les réglages ne fournissent que
+  // le repli quand ce mois n'a pas le sien.
+  const goalDialog = (trigger: React.ReactNode) => (
+    <GoalDialog
+      year={summary.year}
+      month={summary.month}
+      monthLabel={monthLabel}
+      goals={goals}
+      fallback={{
+        revenueTarget: settings.goals.monthlyRevenue,
+        daysTarget: settings.goals.monthlyDays,
+      }}
+      trigger={trigger}
+    />
+  );
 
   // `last12Months` va du plus ancien au mois en cours : l'avant-dernier point
   // est donc le mois précédent.
@@ -79,15 +103,25 @@ export default async function DashboardPage() {
                 <p className="text-subtle-foreground mt-1.5 text-xs">
                   {summary.monthRevenue >= target
                     ? "Objectif atteint."
-                    : `Reste ${formatMoney(target - summary.monthRevenue)} à faire.`}
+                    : `Reste ${formatMoney(target - summary.monthRevenue)} à faire.`}{" "}
+                  {goalDialog(
+                    <button
+                      type="button"
+                      className="hover:text-foreground underline-offset-4 hover:underline"
+                    >
+                      Modifier
+                    </button>,
+                  )}
                 </p>
               </div>
             ) : (
               <p className="text-subtle-foreground text-xs">
-                Aucun objectif —{" "}
-                <Link href="/reglages" className="text-primary hover:underline">
-                  en définir un
-                </Link>
+                Aucun objectif pour {monthLabel} —{" "}
+                {goalDialog(
+                  <button type="button" className="text-primary hover:underline">
+                    en définir un
+                  </button>,
+                )}
               </p>
             )}
           </div>
