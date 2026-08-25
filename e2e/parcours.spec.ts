@@ -202,6 +202,35 @@ test.describe("cœur du produit", () => {
   test("le tableau de bord agrège les jours cochés", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("À facturer").first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: "CA des 12 derniers mois" })).toBeVisible();
+    // L'historique 12 mois est un `figure` nommé par sa légende : on vise le
+    // nom accessible plutôt qu'un titre de carte, qui n'est que de la mise en
+    // page et bouge à chaque retouche visuelle.
+    await expect(page.getByRole("figure", { name: /douze derniers mois/i })).toBeVisible();
+  });
+
+  test("la palette ⌘K cherche un client et y navigue", async ({ page }) => {
+    await page.goto("/");
+
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Recherche et commandes" });
+    await expect(palette).toBeVisible();
+
+    // Saisie en minuscules : la recherche doit être tolérante à la casse.
+    await palette.getByLabel("Rechercher").fill("client e2e");
+    const resultat = palette.getByRole("option", { name: /Client E2E/ });
+    await expect(resultat).toBeVisible();
+
+    await page.keyboard.press("Enter");
+    await expect(palette).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Client E2E" })).toBeVisible();
+  });
+
+  test("la palette se ferme avec Échap", async ({ page }) => {
+    await page.goto("/");
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Recherche et commandes" });
+    await expect(palette).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
   });
 });

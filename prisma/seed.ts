@@ -5,6 +5,7 @@
  */
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "../generated/prisma/client";
+import { CLIENT_COLORS } from "../lib/colors";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({ url: process.env.DATABASE_URL ?? "file:./prisma/dev.db" }),
@@ -25,7 +26,7 @@ async function seedDemo() {
       company: "Nord SAS",
       email: "contact@exemple.fr",
       defaultRate: 55000,
-      color: "#6366f1",
+      color: CLIENT_COLORS[0],
       paymentTerms: 30,
       notes: "Client de démonstration.",
     },
@@ -35,7 +36,7 @@ async function seedDemo() {
     data: {
       name: "Studio Kappa",
       defaultRate: 65000,
-      color: "#10b981",
+      color: CLIENT_COLORS[1],
       paymentTerms: 45,
     },
   });

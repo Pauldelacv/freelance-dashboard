@@ -205,7 +205,7 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
   séparation (daltonisme et vision normale) en clair comme en sombre. Ne pas
   réordonner sans revalider — voir `lib/colors.ts`.
 - **PWA** installable sur mobile — cocher ses jours depuis le téléphone.
-- Recherche globale `⌘K` (clients, missions, prospects, sites).
+- Recherche globale `⌘K` (clients, prospects, sites, pages) — insensible aux accents et à la casse, pilotable entièrement au clavier. Appariement isolé dans `lib/search.ts`, testé unitairement.
 - **Export CSV** des tables principales (`;` et décimales à la virgule, ouvrable tel quel dans un tableur français) + **backup complet JSON** en 1 clic depuis les réglages.
 - Interface en **français**, montants en euros, **sans TVA** (mention « TVA non applicable, art. 293 B du CGI » sur les récapitulatifs copiables vers Indy).
 
@@ -238,6 +238,42 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 - Courbe des encaissements attendus semaine par semaine sur 12 semaines, empilée par client.
 - Distinction visuelle entre **certain** (déjà facturé dans Indy) et **probable** (jours travaillés pas encore facturés).
 - Option : inclure le pipeline pondéré en zone hachurée, pour voir le creux à venir.
+
+---
+
+## 4bis. Charte visuelle
+
+> Ajoutée avec la refonte UX/UI. Les règles ci-dessous sont ce qui distingue une
+> interface _dessinée_ d'un assemblage de composants par défaut : s'en écarter
+> demande une raison, pas une préférence.
+
+**Règle unique dont tout découle : l'interface est en niveaux de gris, la
+couleur appartient aux données.** Le châssis — barre latérale, cartes, boutons,
+bordures — est neutre. La couleur ne sert qu'à ce qui porte un sens : l'état
+d'une somme (à facturer / facturé / encaissé) et l'identité d'un client.
+
+- **Pas de violet de marque.** `--primary` est une encre ardoise sombre et peu
+  saturée. Elle doit rester lisible en texte de lien _et_ sobre en aplat, et ne
+  jamais être confondue avec le bleu de dataviz `#2a78d6` — d'où sa luminosité
+  basse et sa chroma deux fois moindre.
+- **Le filet plutôt que l'ombre.** Les cartes se séparent par une bordure d'un
+  pixel. L'ombre (`--shadow-overlay`) est réservée à ce qui flotte réellement :
+  dialogues, palette de commandes, listes déroulantes.
+- **Une hiérarchie, pas une grille de tuiles.** Une rangée de six tuiles
+  identiques ne hiérarchise rien. Un écran porte _un_ chiffre principal, puis
+  ses constantes vitales en bande dense (`MetricRow`), puis le détail.
+- **Un libellé se distingue par sa forme.** `.metric-label` (petit, capitales,
+  espacé) plutôt qu'un simple gris : la hiérarchie tient alors en clair comme
+  en sombre, sans dépendre du contraste.
+- **Les nombres s'alignent.** `.tabular` sur tout montant, colonnes numériques
+  à droite. Une liste qu'on compare est un tableau, pas une galerie de cartes.
+- **Pas d'icône décorative.** Une icône qui ne fait que redire son libellé est
+  du bruit ; elle n'est là que si elle porte une information.
+- **Les paliers de surface doivent rester écartés en sombre.** `card` <
+  `elevated` < `muted` < `border` : deux paliers trop proches rendent invisible
+  l'élément actif posé dessus (cas déjà rencontré sur la palette ⌘K).
+- **La palette client de `lib/colors.ts` est validée** : ne pas la réordonner
+  (voir §4.7). Les données de démonstration s'y réfèrent par index.
 
 ---
 
