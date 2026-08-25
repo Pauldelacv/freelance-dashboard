@@ -11,7 +11,7 @@ Un tableau de bord web **mono-utilisateur** (usage perso), auto-hébergé sur un
 
 1. **Cocher les jours travaillés** dans un calendrier (journée / demi-journée, rattachée à un client).
 2. **Gérer les clients** avec leur **TJM** et en déduire automatiquement le CA.
-3. **Gérer une liste de sites de veille** (liens, catégories, flux RSS).
+3. **Gérer une liste de sites de veille** (annuaire de liens, catégories, tags, favoris).
 4. Une couche de pilotage autour : CA, facturation, objectifs, dépenses.
 
 Principe directeur : **rapide à utiliser au quotidien** (2 clics pour cocher une journée), pas une usine à gaz. Tout ce qui n'est pas utilisé chaque semaine reste optionnel/repliable.
@@ -26,7 +26,7 @@ Principe directeur : **rapide à utiliser au quotidien** (2 clics pour cocher un
 | UI | **Tailwind CSS v4** + **shadcn/ui** + lucide-react | Composants sobres, dark mode natif |
 | Graphiques | **Recharts** | Léger, suffisant pour CA / jours |
 | Calendrier | Grille mensuelle **maison** (pas de lib lourde) | Le besoin = cocher des cases, pas gérer des events |
-| Base de données | **SQLite** + volume persistant (défaut) — bascule Postgres possible | 1 fichier = 1 backup, zéro service supplémentaire sur le VPS |
+| Base de données | **SQLite** + volume persistant *(validé)* | 1 fichier = 1 backup, zéro service supplémentaire sur le VPS |
 | ORM | **Prisma** | Migrations propres, changement SQLite→Postgres = 1 ligne |
 | Auth | Session cookie signée, **mot de passe unique** hashé (argon2) en variable d'env | Mono-utilisateur, pas besoin de NextAuth |
 | Dates | **date-fns** + `Europe/Paris` | Pas de dérive de fuseau sur les jours |
@@ -60,7 +60,6 @@ model Client {
   createdAt     DateTime @default(now())
   missions      Mission[]
   workDays      WorkDay[]
-  invoices      Invoice[]
 }
 
 model Mission {
@@ -85,32 +84,30 @@ model WorkDay {
   rate      Int     // TJM figé au moment de la saisie (historique fiable)
   type      String  @default("billable") // billable | internal | training | off
   note      String?
-  invoiceId String?  // rattachement une fois facturé
+  billing   String  @default("pending")  // pending | invoiced | paid  (facture émise dans Indy)
+  billedAt  String?  // date de la facture Indy, base du prévisionnel de trésorerie
+  paidAt    String?
   @@unique([date, clientId, missionId])
 }
 
-model Invoice {
-  id         String   @id @default(cuid())
-  number     String   @unique      // FA-2026-001
-  clientId   String
-  issueDate  String
-  dueDate    String
-  status     String   @default("draft") // draft | sent | paid | late | cancelled
-  vatRate    Int      @default(0)   // en points de base (2000 = 20 %)
-  paidAt     String?
-  notes      String?
-  lines      InvoiceLine[]
-  workDays   WorkDay[]
+model Prospect {
+  id           String  @id @default(cuid())
+  name         String
+  company      String?
+  email        String?
+  source       String?  // recommandation | LinkedIn | site | réseau…
+  stage        String   @default("contacted") // contacted | quoted | won | lost
+  estimatedRate Int?    // TJM pressenti, en centimes
+  estimatedDays Float?
+  probability  Int      @default(50) // en %
+  nextAction   String?
+  nextActionAt String?
+  notes        String?
+  clientId     String?  // rempli à la conversion en client
+  createdAt    DateTime @default(now())
 }
 
-model InvoiceLine {
-  id        String @id @default(cuid())
-  invoiceId String
-  label     String
-  quantity  Float
-  unitPrice Int
-}
-
+// Optionnel — la comptabilité reste dans Indy. Activable dans les réglages.
 model Expense {
   id         String  @id @default(cuid())
   date       String
@@ -145,7 +142,7 @@ model Goal {
 
 model Setting {
   key   String @id
-  value String   // JSON : identité, mentions légales facture, régime fiscal, taux de charges…
+  value String   // JSON : régime fiscal, taux de charges, URL Indy, objectifs par défaut…
 }
 ```
 
@@ -165,56 +162,71 @@ model Setting {
 ### 4.2 Clients & TJM
 - CRUD client : nom, société, contact, **TJM par défaut**, couleur, délai de paiement, statut, notes.
 - Missions rattachées avec TJM spécifique qui écrase celui du client.
-- Fiche client : CA total, CA de l'année, jours travaillés, TJM moyen réel, factures en attente.
+- Fiche client : CA total, CA de l'année, jours travaillés, TJM moyen réel, montant à facturer et encaissements attendus.
 - Le TJM est **figé sur chaque `WorkDay`** à la saisie : changer le TJM d'un client ne réécrit pas l'historique.
 
-### 4.3 Facturation
-- Génération d'une facture depuis les jours non facturés d'un client sur une période (1 clic).
-- Numérotation automatique `FA-{année}-{séquence}`, statuts brouillon → envoyée → payée, marquage automatique **en retard** après échéance.
-- Export **PDF** (rendu HTML → PDF côté serveur), avec identité, mentions légales, TVA ou mention « TVA non applicable, art. 293 B du CGI ».
-- Tableau de bord des impayés + total en attente d'encaissement.
+### 4.3 Facturation → **Indy** (externe)
+Aucun moteur de facturation dans l'application : **Indy reste la source de vérité** comptable et fiscale.
+Ce que le dashboard fait à la place, en restant minimal :
+- **Lien direct vers Indy** dans la barre de navigation et sur chaque fiche client.
+- Chaque `WorkDay` porte un statut de facturation : *à facturer → facturé → encaissé*.
+- Action **« Clôturer le mois »** sur une fiche client : marque d'un coup tous les jours de la période comme facturés, avec un récapitulatif copiable (nombre de jours, TJM, total HT) à coller dans Indy.
+- Le dashboard affiche donc en permanence : **à facturer**, **facturé non encaissé**, **encaissé** — sans jamais dupliquer une facture.
 
 ### 4.4 Finances
-- CA **facturé** vs **encaissé** vs **prévisionnel** (jours cochés non encore facturés).
-- Dépenses par catégorie, récurrentes ou ponctuelles.
-- Estimation des charges sociales/impôts selon le régime configuré (micro-BNC / EI / SASU) → **net estimé**.
-- Provision TVA si assujetti.
-- Graphiques : CA mensuel sur 12 mois, répartition par client, évolution du TJM moyen.
+- CA **prévisionnel** (jours cochés à facturer) vs **facturé** vs **encaissé**.
+- Graphiques : CA mensuel sur 12 mois, répartition par client, évolution du TJM moyen réel.
+- Suivi des dépenses et estimation des charges : **module optionnel désactivé par défaut** (Indy le fait déjà). Activable dans les réglages si le besoin apparaît.
 
-### 4.5 Veille
+### 4.5 Veille — annuaire de liens
 - Liste des sites : titre, URL, catégorie, tags, favicon récupéré automatiquement, favori.
 - Filtres par catégorie/tag, recherche, tri, vue **liste dense** ou **cartes**.
-- Optionnel (phase 3) : lecteur **RSS** intégré — récupération périodique des derniers articles des flux renseignés, marquage lu/non lu, ouverture externe.
-- Import/export de la liste en JSON/OPML.
+- Ajout rapide : coller une URL, le titre et le favicon sont récupérés automatiquement.
+- Marquage de la dernière visite pour repérer les sites délaissés.
+- Import/export de la liste en JSON (et OPML pour récupérer un export de lecteur existant).
+- *Pas de lecteur RSS* — décision validée, on reste sur un annuaire.
 
 ### 4.6 Objectifs & KPI (page d'accueil)
-Bandeau de tuiles : CA du mois vs objectif · jours travaillés vs objectif · TJM moyen · taux d'occupation · impayés · prochaine échéance.
-En dessous : calendrier du mois en cours + graphique CA 12 mois + factures à relancer.
+Bandeau de tuiles : CA du mois vs objectif · jours travaillés vs objectif · TJM moyen · taux d'occupation · **à facturer** · **encaissements attendus ce mois-ci**.
+En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à relancer.
 
 ### 4.7 Confort
 - **Dark mode** (défaut système).
 - **PWA** installable sur mobile — cocher ses jours depuis le téléphone.
-- Recherche globale `⌘K` (clients, factures, sites).
+- Recherche globale `⌘K` (clients, missions, prospects, sites).
 - **Export CSV** de toutes les tables + **backup complet JSON** en 1 clic depuis les réglages.
 - Interface en **français**, montants en euros.
 
 ---
 
-## 5. Idées supplémentaires proposées
+## 5. Modules retenus pour la v1
 
-À arbitrer — chacune est un module indépendant, cochable dans les réglages :
+### 5.1 Simulateur de TJM
+« Pour **X € net par mois**, en travaillant **Y jours**, il me faut un TJM de **Z**. »
+- Curseurs : revenu net visé, jours travaillés par mois, taux de charges (issu du régime fiscal configuré), semaines de congés par an.
+- Calcul dans les deux sens : *objectif de net → TJM requis*, et *TJM actuel → net estimé*.
+- Comparaison avec le **TJM moyen réel** constaté sur les 12 derniers mois : l'écart est affiché explicitement.
+- Logique isolée dans `lib/calculations/rate-simulator.ts`, couverte par des tests unitaires.
 
-1. **Pipeline prospects** (CRM léger) : colonnes Contacté → Devis envoyé → Gagné/Perdu, avec valeur estimée.
-2. **Devis** : même moteur que la facture, convertible en facture en un clic.
-3. **Suivi du temps** : chrono par mission pour les clients au forfait ou horaires.
-4. **Rappels de relance** : liste des factures dépassant l'échéance + brouillon de mail de relance pré-rempli.
-5. **Simulateur de TJM** : « pour X € net/mois avec Y jours travaillés, il faut un TJM de Z ».
-6. **Prévisionnel de trésorerie** à 3 mois basé sur les factures émises et les délais de paiement.
-7. **Journal / notes hebdo** : ce qui a été fait, à ressortir en fin de mission.
-8. **Widget disponibilités** : « premier créneau libre », utile pour répondre à un prospect.
-9. **Rapport mensuel PDF** : synthèse à archiver ou envoyer au comptable.
+### 5.2 Pipeline prospects
+- Vue **kanban** : Contacté → Devis envoyé → Gagné / Perdu, glisser-déposer entre colonnes.
+- Par prospect : TJM pressenti, jours estimés, probabilité, **valeur pondérée** (TJM × jours × probabilité).
+- Total pondéré du pipeline affiché en tête de colonne.
+- Relances : champ « prochaine action + date », les prospects en retard remontent sur le dashboard.
+- Un prospect *Gagné* se convertit en **client** en un clic, en reprenant ses informations.
+
+### 5.3 Prévisionnel de trésorerie (3 mois)
+- Alimenté par les `WorkDay` : les jours *à facturer* deviennent des encaissements attendus à `fin de mois + délai de paiement du client`, les jours *facturés* à `date de facture + délai`.
+- Courbe des encaissements attendus semaine par semaine sur 12 semaines, empilée par client.
+- Distinction visuelle entre **certain** (déjà facturé dans Indy) et **probable** (jours travaillés pas encore facturés).
+- Option : inclure le pipeline pondéré en zone hachurée, pour voir le creux à venir.
 
 ---
+
+## 5bis. Idées gardées en réserve
+
+Non retenues pour la v1, à rouvrir après usage réel :
+devis · suivi du temps horaire · journal hebdomadaire de mission · widget « prochaine disponibilité » · rapport mensuel PDF · suivi des dépenses.
 
 ## 6. Déploiement Coolify
 
@@ -283,29 +295,31 @@ DEPLOY.md
 
 | Phase | Contenu | Résultat |
 |---|---|---|
-| **0 — Socle** | Next.js + Tailwind + shadcn + Prisma + auth + Dockerfile + healthcheck + `DEPLOY.md` | **Déployable sur Coolify dès la fin de la phase 0** |
-| **1 — Cœur** | Clients + TJM, calendrier des jours travaillés, calculs de CA, dashboard KPI | Utilisable au quotidien |
-| **2 — Veille** | Sites de veille, catégories, tags, favoris, import/export | |
-| **3 — Facturation** | Factures, PDF, statuts, impayés | |
-| **4 — Finances** | Dépenses, charges, objectifs, graphiques | |
-| **5 — Options** | Modules de la section 5 retenus, PWA, `⌘K`, backup | |
+| **0 — Socle** | Next.js + Tailwind + shadcn + Prisma/SQLite + auth + Dockerfile + healthcheck + `DEPLOY.md` | **Déployable sur Coolify dès la fin de la phase 0** |
+| **1 — Cœur** | Clients + TJM, calendrier des jours travaillés, calculs de CA, statuts de facturation, dashboard KPI | Utilisable au quotidien |
+| **2 — Veille** | Annuaire de sites, catégories, tags, favoris, import/export | |
+| **3 — Simulateur de TJM** | Calcul dans les deux sens + comparaison au TJM réel | |
+| **4 — Pipeline prospects** | Kanban, valeur pondérée, relances, conversion en client | |
+| **5 — Trésorerie** | Prévisionnel 12 semaines, graphiques CA, objectifs | |
+| **6 — Confort** | PWA, `⌘K`, dark mode, export CSV + backup JSON | |
 
 Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, testée et déployable.
 
 ---
 
-## 9. Points à valider avant de coder
+## 9. Décisions prises / points restants
 
-1. **Base de données** : SQLite (simple, 1 fichier, backup trivial) ou PostgreSQL (service Coolify séparé) ? → *recommandation : SQLite*.
-2. **Régime fiscal** pour l'estimation des charges : micro-BNC / micro-BIC / EI au réel / SASU ? Assujetti à la TVA ?
-3. **Facturation** : nécessaire dès maintenant, ou déjà géré par un outil externe (Freebe, Henrri, Abby…) ? Si externe, on garde uniquement le suivi CA/jours.
-4. **Lecteur RSS** dans la veille, ou simple annuaire de liens ?
-5. **Modules de la section 5** à retenir pour la v1.
-6. **Format de TJM** : uniquement journalier, ou aussi horaire / forfait mission ?
-7. **Nom de domaine** prévu sur le VPS (pour `NEXT_PUBLIC_APP_URL` et les mentions de facture).
-8. **Identité de facturation** (nom, SIRET, adresse, IBAN) — à renseigner plus tard dans les réglages, jamais en dur dans le dépôt.
+**Validé le 25/08/2026 :**
+- Base de données : **SQLite**.
+- Facturation : **externalisée dans Indy**, simple lien + statuts de facturation côté dashboard.
+- Veille : **annuaire de liens**, sans lecteur RSS.
+- Modules v1 : **simulateur de TJM**, **pipeline prospects**, **prévisionnel de trésorerie**.
 
----
+**Reste à préciser (n'empêche pas de démarrer les phases 0 à 2) :**
+1. **Régime fiscal et taux de charges** — nécessaire au simulateur de TJM (phase 3). Par défaut : micro-BNC, 26,1 % de cotisations, non assujetti à la TVA ; paramétrable dans les réglages.
+2. **Format de TJM** : uniquement journalier, ou aussi horaire / forfait mission ? Par défaut : journalier + demi-journée.
+3. **Nom de domaine** sur le VPS, pour `NEXT_PUBLIC_APP_URL`.
+4. **URL de ton espace Indy**, pour les liens directs (à mettre dans les réglages, pas dans le dépôt).
 
 ## 10. Conventions pour Claude Code
 
