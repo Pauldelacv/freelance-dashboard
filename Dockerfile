@@ -8,6 +8,14 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 ENV DATABASE_URL="file:/data/app.db"
+
+# better-sqlite3 13 livre ses binaires dans prebuilds/, mais expose aussi un
+# binding.gyp sans script "install" : npm applique alors son "node-gyp rebuild"
+# implicite. Le toolchain ne sert qu'à satisfaire cette étape et reste confiné
+# à cet étage — l'image finale n'en hérite pas.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
