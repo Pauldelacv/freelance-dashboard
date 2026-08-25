@@ -31,9 +31,10 @@ export function ImportDialog() {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState<FormState, FormData>(importSitesAction, {});
 
+  // Voir site-form-dialog : on suit l'objet d'état, pas ses champs.
   useEffect(() => {
     if (state.ok && !state.error) setOpen(false);
-  }, [state.ok, state.error]);
+  }, [state]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

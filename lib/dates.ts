@@ -103,6 +103,16 @@ export function formatLongDate(iso: string): string {
   return longDateFormatter.format(fromIsoDate(iso));
 }
 
+/** Lundi de la semaine contenant cette date, au format ISO. */
+export function startOfWeekIso(iso: string): string {
+  return isoAddDays(iso, -(isoWeekday(iso) - 1));
+}
+
+/** "sem. du 24/08" — étiquette courte pour les axes de graphiques. */
+export function formatWeekLabel(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
 export function yearOf(iso: string): number {
   return Number(iso.slice(0, 4));
 }

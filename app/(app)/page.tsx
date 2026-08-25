@@ -1,4 +1,13 @@
-import { CalendarCheck, Euro, Gauge, PiggyBank, Receipt, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import {
+  AlertCircle,
+  CalendarCheck,
+  Euro,
+  Gauge,
+  PiggyBank,
+  Receipt,
+  TrendingUp,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiTile } from "@/components/dashboard/kpi-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +91,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
             <Row label="Clients actifs" value={String(summary.clientCount)} />
+            <Row label="Pipeline pondéré" value={formatMoney(summary.pipelineValue)} />
             <Row
               label="Jours facturables ce mois"
               value={summary.monthBillableDays.toLocaleString("fr-FR")}
@@ -92,6 +102,46 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </section>
+
+      {summary.dueProspects.length > 0 ? (
+        <section className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Prospects à relancer</CardTitle>
+            </CardHeader>
+            <CardContent className="divide-border flex flex-col divide-y">
+              {summary.dueProspects.map((prospect) => (
+                <div
+                  key={prospect.id}
+                  className="flex flex-wrap items-center gap-3 py-2 first:pt-0 last:pb-0"
+                >
+                  <AlertCircle
+                    className={`size-4 shrink-0 ${prospect.late ? "text-warning" : "text-muted-foreground"}`}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{prospect.name}</p>
+                    {prospect.company ? (
+                      <p className="text-muted-foreground truncate text-xs">{prospect.company}</p>
+                    ) : null}
+                  </div>
+                  <p className="text-muted-foreground text-sm">
+                    {prospect.nextAction ?? "Relance prévue"}
+                    {prospect.nextActionAt ? ` · ${prospect.nextActionAt}` : ""}
+                  </p>
+                  <span className="tabular ml-auto text-sm">
+                    {formatMoneyShort(prospect.weighted)} pondérés
+                  </span>
+                </div>
+              ))}
+              <div className="pt-3">
+                <Link href="/prospects" className="text-primary text-sm hover:underline">
+                  Ouvrir le pipeline →
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
     </>
   );
 }
@@ -106,8 +156,8 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Mini-graphique en barres sans dépendance : Recharts arrivera en phase 5 pour
- * les vues détaillées, mais ce bandeau doit rester léger et rendu côté serveur.
+ * Mini-graphique en barres rendu côté serveur : ce bandeau n'a pas besoin
+ * d'interaction, on évite d'embarquer Recharts (réservé à la trésorerie).
  */
 function MonthlyBars({ points }: { points: { key: string; label: string; revenue: number }[] }) {
   const max = Math.max(...points.map((point) => point.revenue), 1);

@@ -25,7 +25,15 @@ const eslintConfig = [
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          // Autorise `const { aRetirer, ...reste } = objet` pour omettre des clés.
+          ignoreRestSiblings: true,
+        },
+      ],
     },
   },
 ];

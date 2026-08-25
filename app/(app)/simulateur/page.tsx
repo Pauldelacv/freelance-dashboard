@@ -1,20 +1,19 @@
 import { PageHeader } from "@/components/layout/page-header";
-import { ComingSoon } from "@/components/layout/coming-soon";
+import { RateSimulator } from "@/components/simulator/rate-simulator";
+import { getSimulatorContext } from "@/lib/queries/simulator";
 
 export const metadata = { title: "Simulateur TJM" };
 
-export default function SimulateurPage() {
+export default async function SimulateurPage() {
+  const context = await getSimulatorContext();
+
   return (
     <>
-      <PageHeader title="Simulateur de TJM" description="Du revenu net visé au TJM nécessaire." />
-      <ComingSoon
-        phase="Phase 3 — simulateur de TJM"
-        items={[
-          "Objectif de net → TJM requis, et TJM actuel → net estimé",
-          "Charges à 26,1 %, sans TVA (paramétrable)",
-          "Écart avec le TJM moyen réel des 12 derniers mois",
-        ]}
+      <PageHeader
+        title="Simulateur de TJM"
+        description="Du revenu net visé au TJM nécessaire, et l'inverse."
       />
+      <RateSimulator context={context} />
     </>
   );
 }

@@ -104,6 +104,20 @@ test.describe("cœur du produit", () => {
     await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
   });
 
+  test("enchaîne deux créations sans rouvrir la page", async ({ page }) => {
+    // Régression : la boîte de dialogue restait ouverte à la deuxième création,
+    // l'état de la Server Action portant déjà ok: true.
+    await page.goto("/prospects");
+    for (const nom of ["Prospect A", "Prospect B"]) {
+      await page.getByRole("button", { name: "Nouveau prospect" }).first().click();
+      const formulaire = page.getByRole("dialog");
+      await formulaire.getByLabel("Intitulé").fill(nom);
+      await formulaire.getByRole("button", { name: "Créer" }).click();
+      await expect(page.getByRole("dialog")).toBeHidden();
+      await expect(page.getByText(nom)).toBeVisible();
+    }
+  });
+
   test("enregistre les réglages", async ({ page }) => {
     await page.goto("/reglages");
     await page.getByLabel("URL de votre espace Indy").fill("https://app.indy.fr");

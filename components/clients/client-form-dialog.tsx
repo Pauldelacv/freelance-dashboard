@@ -81,9 +81,12 @@ export function ClientFormDialog({
     {},
   );
 
+  // On dépend de l'objet d'état, pas de `state.ok` : useActionState renvoie un
+  // nouvel objet à chaque envoi, sinon une deuxième création d'affilée laisserait
+  // la boîte de dialogue ouverte (`ok` valant déjà true).
   useEffect(() => {
     if (state.ok) setOpen(false);
-  }, [state.ok]);
+  }, [state]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

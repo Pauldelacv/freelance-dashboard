@@ -11,6 +11,7 @@ import {
   workedDays,
   type WorkDayLike,
 } from "@/lib/calculations/revenue";
+import { dueProspects, openPipelineValue, weightedValue } from "@/lib/calculations/pipeline";
 import { getSettings } from "@/lib/settings";
 
 export interface MonthlyPoint {
@@ -39,6 +40,18 @@ export interface DashboardSummary {
   daysTarget: number | null;
   last12Months: MonthlyPoint[];
   clientCount: number;
+  /** Pipeline pondéré des affaires encore ouvertes. */
+  pipelineValue: number;
+  /** Prospects dont la relance est due ou en retard. */
+  dueProspects: {
+    id: string;
+    name: string;
+    company: string | null;
+    nextAction: string | null;
+    nextActionAt: string | null;
+    weighted: number;
+    late: boolean;
+  }[];
 }
 
 /** Les 12 derniers mois, du plus ancien au mois en cours. */
@@ -55,7 +68,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const from = firstDayOfMonth(windowStart.year, windowStart.month);
   const to = lastDayOfMonth(year, month);
 
-  const [windowDays, pendingDays, invoicedDays, yearDays, goal, settings, clientCount] =
+  const [windowDays, pendingDays, invoicedDays, yearDays, goal, settings, clientCount, prospects] =
     await Promise.all([
       prisma.workDay.findMany({ where: { date: { gte: from, lte: to } } }),
       prisma.workDay.findMany({ where: { billing: "pending", type: "billable" } }),
@@ -66,6 +79,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       prisma.goal.findFirst({ where: { year, month } }),
       getSettings(),
       prisma.client.count({ where: { status: "active" } }),
+      prisma.prospect.findMany({ where: { stage: { in: ["contacted", "quoted"] } } }),
     ]);
 
   const days = windowDays as WorkDayLike[];
@@ -95,5 +109,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       revenue: byMonth.get(monthKey(point.year, point.month)) ?? 0,
     })),
     clientCount,
+    pipelineValue: openPipelineValue(prospects),
+    dueProspects: dueProspects(prospects, today).map((prospect) => ({
+      id: prospect.id,
+      name: prospect.name,
+      company: prospect.company,
+      nextAction: prospect.nextAction,
+      nextActionAt: prospect.nextActionAt,
+      weighted: weightedValue(prospect),
+      late: (prospect.nextActionAt ?? today) < today,
+    })),
   };
 }
