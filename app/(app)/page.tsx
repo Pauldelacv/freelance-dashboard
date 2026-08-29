@@ -5,11 +5,13 @@ import { GoalDialog } from "@/components/goals/goal-dialog";
 import { Metric, MetricRow } from "@/components/dashboard/metric";
 import { RevenueBars } from "@/components/dashboard/revenue-bars";
 import { CashFlowBar } from "@/components/dashboard/cash-flow-bar";
+import { PaymentInbox } from "@/components/dashboard/payment-inbox";
 import { Card, CardBar, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDashboardSummary } from "@/lib/queries/dashboard";
 import { getYearGoals } from "@/lib/queries/goals";
 import { getSettings } from "@/lib/settings";
+import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatMoneyShort } from "@/lib/money";
 import { formatMonthLabel, todayIso } from "@/lib/dates";
@@ -47,6 +49,11 @@ export default async function DashboardPage() {
   const target = summary.revenueTarget;
   const targetRatio = target ? summary.monthRevenue / target : null;
 
+  // Le net vient du taux de cotisations des réglages, jamais d'une constante :
+  // changer de régime se fait dans l'interface, pas dans le code.
+  const monthNet = netFromRevenue(summary.monthRevenue, settings.tax.chargeRate);
+  const chargeLabel = percentFormatter.format(settings.tax.chargeRate);
+
   return (
     <>
       <PageHeader
@@ -66,12 +73,19 @@ export default async function DashboardPage() {
       {/* Le mois en cours comme un seul objet : le chiffre qu'on vient lire, son
           historique qui lui donne une échelle, et ses constantes vitales. */}
       <Card>
-        <div className="grid gap-6 p-4 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-7">
+        <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-7">
           <div className="flex flex-col justify-between gap-4">
             <div>
               <p className="metric-label">CA facturable du mois</p>
               <p className="tabular mt-1 text-3xl font-semibold">
                 {formatMoney(summary.monthRevenue)}
+              </p>
+              {/* Le net juste sous le brut : c'est le chiffre qu'on cherche
+                  vraiment, mais il reste une estimation — d'où sa taille. */}
+              <p className="text-muted-foreground mt-1 text-sm">
+                <span className="tabular text-foreground font-medium">{formatMoney(monthNet)}</span>{" "}
+                net estimé
+                <span className="text-subtle-foreground"> · {chargeLabel} de cotisations</span>
               </p>
               {delta ? (
                 <p className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
@@ -162,7 +176,7 @@ export default async function DashboardPage() {
         </MetricRow>
       </Card>
 
-      <section className="mt-4 grid items-start gap-4 lg:grid-cols-2">
+      <section className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <Card>
           <CardBar>
             <CardTitle>Ce qui doit encore rentrer</CardTitle>
@@ -192,6 +206,11 @@ export default async function DashboardPage() {
               ]}
             />
           </CardContent>
+
+          {/* Le pointage juste sous la barre : c'est le seul geste qui fait
+              descendre « facturé, non encaissé » vers « encaissé ». */}
+          <PaymentInbox items={summary.awaitingInvoices} />
+
           <div className="border-border text-muted-foreground flex items-baseline justify-between gap-3 border-t px-4 py-2.5 text-xs">
             <span>Encaissé depuis le 1ᵉʳ janvier</span>
             <span
@@ -259,6 +278,12 @@ export default async function DashboardPage() {
     </>
   );
 }
+
+/** « 26,1 % » — le taux de cotisations tel qu'il est saisi dans les réglages. */
+const percentFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "percent",
+  maximumFractionDigits: 2,
+});
 
 /**
  * Écart avec le mois précédent. `null` quand le mois précédent est à zéro :

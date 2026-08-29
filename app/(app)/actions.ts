@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession, signOut } from "@/lib/auth";
+import { markPeriodPaid, markPeriodUnpaid } from "@/lib/billing";
 import { parseMoney } from "@/lib/money";
 import { distributeAnnualGoal } from "@/lib/calculations/goals";
 import { toFieldErrors, type FormState } from "@/lib/validation";
@@ -114,4 +115,36 @@ function saveOne(
   return id
     ? prisma.goal.update({ where: { id }, data: values })
     : prisma.goal.create({ data: { year, month, ...values } });
+}
+
+/**
+ * Pointage d'un encaissement depuis le tableau de bord.
+ *
+ * La facture vit dans Indy, qui ne nous dit pas quand elle est payée : le
+ * pointage est forcément manuel, et il doit être à portée de clic là où le
+ * montant en attente est affiché — sinon « encaissé depuis le 1ᵉʳ janvier »
+ * reste à zéro pour toujours.
+ */
+const periodSchema = z.object({
+  clientId: z.string().min(1).nullable(),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Mois attendu au format AAAA-MM."),
+});
+
+export async function markInvoicePaidAction(input: z.input<typeof periodSchema>) {
+  await requireSession();
+  const parsed = periodSchema.safeParse(input);
+  if (!parsed.success) return { error: "Période invalide." };
+
+  const count = await markPeriodPaid(parsed.data.clientId, parsed.data.month);
+  return { count };
+}
+
+/** Annulation d'un pointage : le mois redevient « facturé, non encaissé ». */
+export async function markInvoiceUnpaidAction(input: z.input<typeof periodSchema>) {
+  await requireSession();
+  const parsed = periodSchema.safeParse(input);
+  if (!parsed.success) return { error: "Période invalide." };
+
+  const count = await markPeriodUnpaid(parsed.data.clientId, parsed.data.month);
+  return { count };
 }

@@ -86,7 +86,10 @@ export function RevenueBars({ points, className }: { points: RevenuePoint[]; cla
           <span
             key={point.key}
             className={cn(
-              "flex-1 text-center text-[10px]",
+              // `min-w-0` + `truncate` : sur un écran très étroit, douze
+              // abréviations de mois pèsent plus que la largeur disponible et
+              // pousseraient toute la page ; elles se rognent au lieu de ça.
+              "min-w-0 flex-1 truncate text-center text-[10px]",
               point.key === currentKey ? "text-foreground font-medium" : "text-subtle-foreground",
             )}
           >

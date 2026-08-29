@@ -93,7 +93,7 @@ export function RateSimulator({ context }: { context: SimulatorContext }) {
         <CardHeader>
           <CardTitle>Hypothèses</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-5 md:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <Slider
             id="days"
             label="Jours facturés par mois"
@@ -146,7 +146,7 @@ export function RateSimulator({ context }: { context: SimulatorContext }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Objectif de revenu → TJM nécessaire</CardTitle>

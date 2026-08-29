@@ -11,8 +11,11 @@ import {
   workedDays,
   type WorkDayLike,
 } from "@/lib/calculations/revenue";
+import { groupAwaitingInvoices, type AwaitingInvoice } from "@/lib/calculations/invoices";
 import { dueProspects, openPipelineValue, weightedValue } from "@/lib/calculations/pipeline";
 import { getSettings } from "@/lib/settings";
+
+export type { AwaitingInvoice };
 
 export interface MonthlyPoint {
   key: string;
@@ -36,6 +39,8 @@ export interface DashboardSummary {
   /** Facturé dans Indy, pas encore encaissé. */
   awaitingPayment: number;
   collectedThisYear: number;
+  /** Factures émises restant à pointer, de la plus ancienne à la plus récente. */
+  awaitingInvoices: AwaitingInvoice[];
   revenueTarget: number | null;
   daysTarget: number | null;
   last12Months: MonthlyPoint[];
@@ -72,7 +77,10 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     await Promise.all([
       prisma.workDay.findMany({ where: { date: { gte: from, lte: to } } }),
       prisma.workDay.findMany({ where: { billing: "pending", type: "billable" } }),
-      prisma.workDay.findMany({ where: { billing: "invoiced", type: "billable" } }),
+      prisma.workDay.findMany({
+        where: { billing: "invoiced", type: "billable" },
+        include: { client: { select: { name: true, color: true, paymentTerms: true } } },
+      }),
       prisma.workDay.findMany({
         where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` }, billing: "paid" },
       }),
@@ -99,6 +107,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     toInvoice: totalRevenue(pendingDays as WorkDayLike[]),
     awaitingPayment: totalRevenue(invoicedDays as WorkDayLike[]),
     collectedThisYear: revenueByBillingStatus(yearDays as WorkDayLike[]).paid,
+    awaitingInvoices: groupAwaitingInvoices(invoicedDays, today),
     revenueTarget: goal?.revenueTarget ?? settings.goals.monthlyRevenue,
     daysTarget: goal?.daysTarget ?? settings.goals.monthlyDays,
     last12Months: last12MonthKeys(year, month).map((point) => ({

@@ -46,7 +46,7 @@ export function PipelineBoard({ prospects, today }: { prospects: ProspectItem[];
   }
 
   return (
-    <div className="grid gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
       {STAGES.map((stage) => {
         const items = groups[stage];
         const total = totalWeightedValue(items);

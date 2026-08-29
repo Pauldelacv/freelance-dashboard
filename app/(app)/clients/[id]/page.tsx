@@ -91,7 +91,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         />
       </section>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-3">
+      <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Facturation par mois</CardTitle>

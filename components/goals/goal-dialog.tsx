@@ -134,7 +134,7 @@ function MonthForm({
 
       <p className="text-sm font-medium capitalize">{monthLabel}</p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="month-revenue">CA visé (€)</Label>
           <Input
@@ -227,7 +227,7 @@ function AnnualForm({
 
       <p className="tabular text-sm font-medium">Année {year}</p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="year-revenue">CA visé (€)</Label>
           <Input

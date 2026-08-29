@@ -4,6 +4,7 @@ import {
   billableMonthsPerYear,
   compareToActual,
   netFromRate,
+  netFromRevenue,
   rateFromNet,
   simulate,
 } from "@/lib/calculations/rate-simulator";
@@ -77,5 +78,27 @@ describe("comparaison au TJM réel", () => {
 
   it("n'invente pas d'écart sans historique", () => {
     expect(compareToActual(65000, 0).gapRatio).toBeNull();
+  });
+});
+
+describe("net d'un CA constaté", () => {
+  it("retranche les cotisations du CA", () => {
+    expect(netFromRevenue(442500, 0.261)) // 4 425,00 €
+      .toBe(327008);
+  });
+
+  it("laisse le CA intact à taux nul et le vide à 100 %", () => {
+    expect(netFromRevenue(442500, 0)).toBe(442500);
+    expect(netFromRevenue(442500, 1)).toBe(0);
+  });
+
+  it("borne un taux aberrant plutôt que de rendre un net négatif", () => {
+    expect(netFromRevenue(442500, 1.5)).toBe(0);
+    expect(netFromRevenue(442500, -0.2)).toBe(442500);
+  });
+
+  it("reste cohérent avec le simulateur : même taux, même net avant charges fixes", () => {
+    const revenue = simulate(60000, { ...base, weeksOff: 0 }).yearlyRevenue;
+    expect(netFromRevenue(revenue, base.chargeRate)).toBe(7981200);
   });
 });
