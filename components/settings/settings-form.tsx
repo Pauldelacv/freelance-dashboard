@@ -78,7 +78,7 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
             depuis le tableau de bord ou le calendrier, et l&apos;emporte sur ces valeurs.
           </p>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             label="CA mensuel visé (€)"
             htmlFor="monthlyRevenue"
@@ -118,7 +118,7 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
             Utilisé par le simulateur de TJM. La comptabilité reste dans Indy.
           </p>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             label="Taux de cotisations (%)"
             htmlFor="chargeRate"

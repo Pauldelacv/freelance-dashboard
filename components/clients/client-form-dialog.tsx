@@ -115,7 +115,7 @@ export function ClientFormDialog({
             <Input id="name" name="name" defaultValue={client?.name} required autoFocus />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Société" htmlFor="company">
               <Input id="company" name="company" defaultValue={client?.company ?? ""} />
             </Field>
@@ -131,7 +131,7 @@ export function ClientFormDialog({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="E-mail" htmlFor="email" error={state.fieldErrors?.email}>
               <Input id="email" name="email" type="email" defaultValue={client?.email ?? ""} />
             </Field>
@@ -140,7 +140,7 @@ export function ClientFormDialog({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Délai de paiement (jours)"
               htmlFor="paymentTerms"

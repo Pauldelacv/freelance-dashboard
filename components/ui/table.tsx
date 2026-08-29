@@ -8,9 +8,14 @@ import { cn } from "@/lib/utils";
  * sur un écran étroit, c'est le tableau qui doit glisser, pas la mise en page.
  * Les colonnes secondaires se masquent en dessous de `md` (`hidden md:table-cell`)
  * pour que ce défilement reste l'exception.
+ *
+ * `relative` n'est pas décoratif : sans bloc conteneur ici, un descendant en
+ * `position: absolute` — le `sr-only` de la colonne d'actions, par exemple — se
+ * positionne par rapport à la page, échappe au défilement du tableau et
+ * élargit tout l'écran de la largeur du tableau.
  */
 export function TableWrap({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("w-full overflow-x-auto", className)} {...props} />;
+  return <div className={cn("relative w-full overflow-x-auto", className)} {...props} />;
 }
 
 export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {

@@ -178,7 +178,9 @@ export function WatchList({ sites }: { sites: WatchSiteItem[] }) {
       ) : (
         <div
           className={cn(
-            dense ? "flex flex-col gap-1.5" : "grid gap-3 md:grid-cols-2 xl:grid-cols-3",
+            dense
+              ? "flex flex-col gap-1.5"
+              : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3",
           )}
         >
           {filtered.map((site) => (

@@ -66,7 +66,7 @@ export default async function DashboardPage() {
       {/* Le mois en cours comme un seul objet : le chiffre qu'on vient lire, son
           historique qui lui donne une échelle, et ses constantes vitales. */}
       <Card>
-        <div className="grid gap-6 p-4 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-7">
+        <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-7">
           <div className="flex flex-col justify-between gap-4">
             <div>
               <p className="metric-label">CA facturable du mois</p>
@@ -162,7 +162,7 @@ export default async function DashboardPage() {
         </MetricRow>
       </Card>
 
-      <section className="mt-4 grid items-start gap-4 lg:grid-cols-2">
+      <section className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <Card>
           <CardBar>
             <CardTitle>Ce qui doit encore rentrer</CardTitle>

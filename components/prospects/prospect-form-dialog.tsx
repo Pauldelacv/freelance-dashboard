@@ -111,7 +111,7 @@ export function ProspectFormDialog({
             <Input id="name" name="name" defaultValue={prospect?.name} required autoFocus />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Société" htmlFor="company">
               <Input id="company" name="company" defaultValue={prospect?.company ?? ""} />
             </Field>
@@ -125,7 +125,7 @@ export function ProspectFormDialog({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="E-mail" htmlFor="email" error={state.fieldErrors?.email}>
               <Input id="email" name="email" type="email" defaultValue={prospect?.email ?? ""} />
             </Field>
@@ -134,7 +134,7 @@ export function ProspectFormDialog({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field
               label="TJM pressenti (€)"
               htmlFor="estimatedRate"
@@ -176,7 +176,7 @@ export function ProspectFormDialog({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Étape" htmlFor="stage">
               <select
                 id="stage"
