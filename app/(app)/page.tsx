@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { getDashboardSummary } from "@/lib/queries/dashboard";
 import { getYearGoals } from "@/lib/queries/goals";
 import { getSettings } from "@/lib/settings";
+import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatMoneyShort } from "@/lib/money";
 import { formatMonthLabel, todayIso } from "@/lib/dates";
@@ -47,6 +48,11 @@ export default async function DashboardPage() {
   const target = summary.revenueTarget;
   const targetRatio = target ? summary.monthRevenue / target : null;
 
+  // Le net vient du taux de cotisations des réglages, jamais d'une constante :
+  // changer de régime se fait dans l'interface, pas dans le code.
+  const monthNet = netFromRevenue(summary.monthRevenue, settings.tax.chargeRate);
+  const chargeLabel = percentFormatter.format(settings.tax.chargeRate);
+
   return (
     <>
       <PageHeader
@@ -72,6 +78,13 @@ export default async function DashboardPage() {
               <p className="metric-label">CA facturable du mois</p>
               <p className="tabular mt-1 text-3xl font-semibold">
                 {formatMoney(summary.monthRevenue)}
+              </p>
+              {/* Le net juste sous le brut : c'est le chiffre qu'on cherche
+                  vraiment, mais il reste une estimation — d'où sa taille. */}
+              <p className="text-muted-foreground mt-1 text-sm">
+                <span className="tabular text-foreground font-medium">{formatMoney(monthNet)}</span>{" "}
+                net estimé
+                <span className="text-subtle-foreground"> · {chargeLabel} de cotisations</span>
               </p>
               {delta ? (
                 <p className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
@@ -259,6 +272,12 @@ export default async function DashboardPage() {
     </>
   );
 }
+
+/** « 26,1 % » — le taux de cotisations tel qu'il est saisi dans les réglages. */
+const percentFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "percent",
+  maximumFractionDigits: 2,
+});
 
 /**
  * Écart avec le mois précédent. `null` quand le mois précédent est à zéro :

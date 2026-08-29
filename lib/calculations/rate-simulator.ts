@@ -110,3 +110,16 @@ export function compareToActual(requiredRate: number, actualRate: number): RateC
     gapRatio: actualRate > 0 ? (requiredRate - actualRate) / actualRate : null,
   };
 }
+
+/**
+ * Net après cotisations d'un chiffre d'affaires déjà réalisé.
+ *
+ * C'est la lecture « à l'envers » du simulateur : plus de jours ni de congés à
+ * projeter, seulement le taux de cotisations appliqué à un CA constaté. Sans
+ * TVA (franchise en base), CA facturé = CA encaissé — le net est donc le CA
+ * diminué des seules cotisations.
+ */
+export function netFromRevenue(revenue: number, chargeRate: number): number {
+  const rate = Math.min(Math.max(chargeRate, 0), 1);
+  return Math.round(revenue * (1 - rate));
+}
