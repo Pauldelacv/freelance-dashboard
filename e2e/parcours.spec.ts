@@ -137,6 +137,39 @@ test.describe("cœur du produit", () => {
     await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
   });
 
+  test("pointe un encaissement depuis le tableau de bord", async ({ page }) => {
+    // Indy ne dit jamais qu'une facture est payée : sans ce geste, « encaissé »
+    // reste à zéro. Le pointage doit donc marcher depuis l'écran d'accueil,
+    // pas seulement depuis la fiche client.
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Pointage");
+    await page.getByLabel("TJM (€)").fill("700");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await expect(page.getByRole("link", { name: /Client Pointage/ })).toBeVisible();
+
+    await page.goto("/calendrier?m=2026-12");
+    await page.selectOption('select[aria-label="Client actif"]', { label: "Client Pointage" });
+    await page.locator('[data-date="2026-12-01"]').click();
+
+    await page.goto("/clients");
+    await page.getByRole("link", { name: /Client Pointage/ }).click();
+    await page.getByRole("button", { name: "Marquer facturé" }).click();
+    await expect(page.getByText("Facturé 700,00 €")).toBeVisible();
+
+    await page.goto("/");
+    const row = page.getByRole("listitem").filter({ hasText: "Client Pointage" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "Encaissé", exact: true }).click();
+
+    // La ligne quitte la liste, et de quoi défaire le clic reste à l'écran.
+    await expect(row).toHaveCount(0);
+    await expect(page.getByText(/encaissé pour Client Pointage/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Annuler" }).click();
+    await expect(row).toBeVisible();
+  });
+
   test("supprime un client sans jour saisi", async ({ page }) => {
     await page.goto("/clients");
     await page.getByRole("button", { name: "Nouveau client" }).first().click();

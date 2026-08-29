@@ -128,9 +128,14 @@ export function startOfWeekIso(iso: string): string {
   return isoAddDays(iso, -(isoWeekday(iso) - 1));
 }
 
+/** "24/08" — date compacte, quand l'année se déduit du contexte. */
+export function formatDayMonth(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
 /** "sem. du 24/08" — étiquette courte pour les axes de graphiques. */
 export function formatWeekLabel(iso: string): string {
-  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+  return formatDayMonth(iso);
 }
 
 export function yearOf(iso: string): number {

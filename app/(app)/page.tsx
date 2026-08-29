@@ -5,6 +5,7 @@ import { GoalDialog } from "@/components/goals/goal-dialog";
 import { Metric, MetricRow } from "@/components/dashboard/metric";
 import { RevenueBars } from "@/components/dashboard/revenue-bars";
 import { CashFlowBar } from "@/components/dashboard/cash-flow-bar";
+import { PaymentInbox } from "@/components/dashboard/payment-inbox";
 import { Card, CardBar, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDashboardSummary } from "@/lib/queries/dashboard";
@@ -205,6 +206,11 @@ export default async function DashboardPage() {
               ]}
             />
           </CardContent>
+
+          {/* Le pointage juste sous la barre : c'est le seul geste qui fait
+              descendre « facturé, non encaissé » vers « encaissé ». */}
+          <PaymentInbox items={summary.awaitingInvoices} />
+
           <div className="border-border text-muted-foreground flex items-baseline justify-between gap-3 border-t px-4 py-2.5 text-xs">
             <span>Encaissé depuis le 1ᵉʳ janvier</span>
             <span
