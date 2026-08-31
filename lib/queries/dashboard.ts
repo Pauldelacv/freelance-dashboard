@@ -39,6 +39,12 @@ export interface DashboardSummary {
   month: number;
   /** CA facturable du mois en cours, jours et forfaits confondus, en centimes. */
   monthRevenue: number;
+  /**
+   * Part de `monthRevenue` venue d'un forfait rattaché au mois : ces missions
+   * n'occupent aucune case du calendrier, et sans ce chiffre à part le total
+   * du mois grimperait sans qu'on sache pourquoi (issue #27).
+   */
+  monthForfaitRevenue: number;
   monthBillableDays: number;
   monthWorkedDays: number;
   monthBusinessDays: number;
@@ -122,6 +128,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const forfaitsByMonth = forfaitRevenueByMonth(missions);
   const forfaits = forfaitRevenueByStatus(missions);
   const businessDays = businessDaysInMonth(year, month);
+  const monthForfaitRevenue = forfaitRevenueIn(missions, monthKey(year, month));
 
   const invoicedForfaits: InvoicedForfait[] = missions
     .filter((mission) => mission.billing === "invoiced" && missionAmount(mission) > 0)
@@ -138,7 +145,8 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   return {
     year,
     month,
-    monthRevenue: totalRevenue(monthDays) + forfaitRevenueIn(missions, monthKey(year, month)),
+    monthRevenue: totalRevenue(monthDays) + monthForfaitRevenue,
+    monthForfaitRevenue,
     monthBillableDays: billableDays(monthDays),
     monthWorkedDays: workedDays(monthDays),
     monthBusinessDays: businessDays,
