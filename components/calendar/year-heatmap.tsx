@@ -2,8 +2,9 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Total } from "@/components/calendar/total";
 import { cn } from "@/lib/utils";
-import { formatMoney, formatMoneyShort } from "@/lib/money";
+import { formatMoney, formatMoneyShort, formatPercent } from "@/lib/money";
 import {
   daysInMonth,
   firstDayOfMonth,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/dates";
 import { businessDaysInYear, holidaysOfYear } from "@/lib/holidays";
 import { billableDays, occupancyRate, totalRevenue, workedDays } from "@/lib/calculations/revenue";
+import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import type { CalendarEntry } from "@/lib/queries/calendar";
 
 const WEEKDAYS = ["l", "m", "m", "j", "v", "s", "d"];
@@ -95,10 +97,13 @@ export function YearHeatmap({
   year,
   entries,
   today,
+  chargeRate,
 }: {
   year: number;
   entries: CalendarEntry[];
   today: string;
+  /** Taux de cotisations des réglages, pour le net estimé de l'année. */
+  chargeRate: number;
 }) {
   const holidays = holidaysOfYear(year);
 
@@ -196,7 +201,20 @@ export function YearHeatmap({
             value={billable.toLocaleString("fr-FR")}
             testId="year-billable-days"
           />
-          <Total label="CA de l'année" value={formatMoney(revenue)} testId="year-revenue" />
+          <Total
+            label="CA de l'année"
+            value={formatMoney(revenue)}
+            sub={
+              <>
+                <span className="tabular text-foreground font-medium">
+                  {formatMoney(netFromRevenue(revenue, chargeRate))}
+                </span>{" "}
+                net estimé
+                <span className="text-subtle-foreground"> · {formatPercent(chargeRate)}</span>
+              </>
+            }
+            testId="year-revenue"
+          />
           <Total
             label="Taux d'occupation"
             value={`${Math.round(occupancy * 100)} %`}
@@ -322,26 +340,4 @@ function MonthBlock({
 
 function Swatch({ style }: { style: React.CSSProperties }) {
   return <span aria-hidden className="size-2.5 rounded-[2px]" style={style} />;
-}
-
-function Total({
-  label,
-  value,
-  hint,
-  testId,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  testId?: string;
-}) {
-  return (
-    <div className="px-4 py-3">
-      <p className="metric-label">{label}</p>
-      <p className="tabular mt-1 text-lg font-semibold" data-testid={testId}>
-        {value}
-      </p>
-      {hint ? <p className="text-subtle-foreground mt-0.5 text-xs">{hint}</p> : null}
-    </div>
-  );
 }

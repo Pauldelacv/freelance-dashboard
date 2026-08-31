@@ -44,7 +44,10 @@ export default async function CalendrierPage({
     const displayedYear = parseYear(a, year);
     // Une seule lecture pour les 365 jours : la vue annuelle n'interroge jamais
     // la base mois par mois.
-    const entries = await getYearEntries(displayedYear);
+    const [entries, yearSettings] = await Promise.all([
+      getYearEntries(displayedYear),
+      getSettings(),
+    ]);
 
     return (
       <>
@@ -59,7 +62,12 @@ export default async function CalendrierPage({
             />
           }
         />
-        <YearHeatmap year={displayedYear} entries={entries} today={today} />
+        <YearHeatmap
+          year={displayedYear}
+          entries={entries}
+          today={today}
+          chargeRate={yearSettings.tax.chargeRate}
+        />
       </>
     );
   }
@@ -103,6 +111,7 @@ export default async function CalendrierPage({
         clients={clients}
         today={today}
         defaultFraction={settings.workday.defaultFraction}
+        chargeRate={settings.tax.chargeRate}
         revenueTarget={monthGoal?.revenueTarget ?? fallback.revenueTarget}
         daysTarget={monthGoal?.daysTarget ?? fallback.daysTarget}
       />

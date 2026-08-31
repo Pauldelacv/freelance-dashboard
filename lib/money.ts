@@ -27,6 +27,20 @@ export function formatMoneyShort(cents: number): string {
   return compactFormatter.format(Math.round(cents / 100));
 }
 
+/**
+ * 0,261 -> « 26,1 % ». Le taux de cotisations est stocké en fraction : il ne
+ * s'affiche jamais brut, et le même formatage sert partout où le net estimé
+ * apparaît (tableau de bord, calendrier).
+ */
+const percentFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "percent",
+  maximumFractionDigits: 2,
+});
+
+export function formatPercent(fraction: number): string {
+  return percentFormatter.format(fraction);
+}
+
 /** "1 250,50" | "1250.5" | "1250,50 €" -> 125050 centimes. null si illisible. */
 export function parseMoney(input: string): number | null {
   const normalized = input

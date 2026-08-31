@@ -68,6 +68,8 @@ test.describe("cœur du produit", () => {
     await expect(jour).toContainText("Client E2E");
     await expect(page.getByTestId("total-revenue")).toHaveText("600,00 €");
     await expect(page.getByTestId("total-days")).toHaveText("1");
+    // Le net estimé suit le CA du mois : 600 € moins 26,1 % de cotisations.
+    await expect(page.getByTestId("total-net")).toHaveText("443,40 €");
 
     // Persistée côté serveur.
     await page.reload();

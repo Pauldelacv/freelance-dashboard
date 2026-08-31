@@ -14,8 +14,9 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Kbd } from "@/components/ui/kbd";
+import { Total } from "@/components/calendar/total";
 import { cn } from "@/lib/utils";
-import { formatMoney, formatMoneyShort } from "@/lib/money";
+import { formatMoney, formatMoneyShort, formatPercent } from "@/lib/money";
 import {
   addMonths,
   daysInMonth,
@@ -28,6 +29,7 @@ import {
 import { businessDaysInMonth, holidaysOfYear } from "@/lib/holidays";
 import { rectangleBetween } from "@/lib/calendar-grid";
 import { DAY_TYPES, occupancyRate, totalRevenue, workedDays } from "@/lib/calculations/revenue";
+import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import type { CalendarEntry } from "@/lib/queries/calendar";
 import { setWorkDayRangeAction, toggleWorkDayAction } from "@/app/(app)/calendrier/actions";
 
@@ -88,6 +90,7 @@ export function CalendarBoard({
   clients,
   today,
   defaultFraction,
+  chargeRate,
   revenueTarget,
   daysTarget,
 }: {
@@ -97,6 +100,8 @@ export function CalendarBoard({
   clients: CalendarClient[];
   today: string;
   defaultFraction: number;
+  /** Taux de cotisations des réglages, pour le net estimé du mois. */
+  chargeRate: number;
   /** Objectifs du mois affiché — ceux du mois s'il en porte, sinon les réglages. */
   revenueTarget: number | null;
   daysTarget: number | null;
@@ -257,6 +262,9 @@ export function CalendarBoard({
 
   const monthEntries = optimisticEntries;
   const revenue = totalRevenue(monthEntries);
+  // Le net suit le CA optimiste : cocher un jour doit déplacer les deux
+  // chiffres du même clic, sans attendre le serveur.
+  const net = netFromRevenue(revenue, chargeRate);
   const worked = workedDays(monthEntries);
   const businessDays = businessDaysInMonth(year, month);
   const occupancy = occupancyRate(monthEntries, businessDays);
@@ -523,6 +531,15 @@ export function CalendarBoard({
           <Total
             label="CA du mois"
             value={formatMoney(revenue)}
+            sub={
+              <>
+                <span className="tabular text-foreground font-medium" data-testid="total-net">
+                  {formatMoney(net)}
+                </span>{" "}
+                net estimé
+                <span className="text-subtle-foreground"> · {formatPercent(chargeRate)}</span>
+              </>
+            }
             hint={
               revenueTarget
                 ? `Objectif ${formatMoneyShort(revenueTarget)} · ${Math.round((revenue / revenueTarget) * 100)} %`
@@ -572,28 +589,6 @@ export function CalendarBoard({
           <Kbd>→</Kbd> mois précédent / suivant
         </span>
       </p>
-    </div>
-  );
-}
-
-function Total({
-  label,
-  value,
-  hint,
-  testId,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  testId?: string;
-}) {
-  return (
-    <div className="px-4 py-3">
-      <p className="metric-label">{label}</p>
-      <p className="tabular mt-1 text-lg font-semibold" data-testid={testId}>
-        {value}
-      </p>
-      {hint ? <p className="text-subtle-foreground mt-0.5 text-xs">{hint}</p> : null}
     </div>
   );
 }
