@@ -87,6 +87,11 @@ export default async function DashboardPage() {
                 net estimé
                 <span className="text-subtle-foreground"> · {chargeLabel} de cotisations</span>
               </p>
+              {summary.monthForfaitRevenue > 0 ? (
+                <p className="text-subtle-foreground mt-1 text-xs">
+                  dont {formatMoney(summary.monthForfaitRevenue)} au forfait, sans jour au calendrier
+                </p>
+              ) : null}
               {delta ? (
                 <p className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
                   {delta.up ? (
@@ -195,7 +200,7 @@ export default async function DashboardPage() {
                   label: "À facturer",
                   amount: summary.toInvoice,
                   color: "bg-warning",
-                  hint: "Jours cochés, pas encore de facture dans Indy",
+                  hint: "Jours cochés ou forfaits, pas encore de facture dans Indy",
                 },
                 {
                   label: "Facturé, non encaissé",
