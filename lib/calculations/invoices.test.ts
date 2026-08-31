@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { groupAwaitingInvoices, type InvoicedDay } from "@/lib/calculations/invoices";
+import {
+  groupAwaitingInvoices,
+  type InvoicedDay,
+  type InvoicedForfait,
+} from "@/lib/calculations/invoices";
 
 const nord = { name: "Agence Nord", color: "#2a78d6", paymentTerms: 30 };
 const kappa = { name: "Studio Kappa", color: "#e0622f", paymentTerms: 45 };
@@ -12,6 +16,19 @@ function day(partial: Partial<InvoicedDay> & { date: string }): InvoicedDay {
     billing: "invoiced",
     clientId: "nord",
     billedAt: null,
+    client: nord,
+    ...partial,
+  };
+}
+
+function forfait(partial: Partial<InvoicedForfait> = {}): InvoicedForfait {
+  return {
+    id: "mission-1",
+    title: "Refonte du site",
+    amount: 450000,
+    date: "2026-08-31",
+    billedAt: "2026-08-31",
+    clientId: "nord",
     client: nord,
     ...partial,
   };
@@ -89,5 +106,37 @@ describe("factures en attente d'encaissement", () => {
     expect(
       groupAwaitingInvoices([day({ date: "2026-08-03", type: "internal" })], "2026-08-29"),
     ).toEqual([]);
+  });
+
+  it("liste chaque mission au forfait à part, sans jours", () => {
+    const invoices = groupAwaitingInvoices([day({ date: "2026-08-03" })], "2026-09-15", [
+      forfait(),
+      forfait({ id: "mission-2", title: "Audit", amount: 120000 }),
+    ]);
+
+    expect(invoices).toHaveLength(3);
+    const forfaits = invoices.filter((invoice) => invoice.kind === "mission");
+    expect(forfaits.map((invoice) => invoice.label)).toEqual(["Refonte du site", "Audit"]);
+    expect(forfaits[0].missionId).toBe("mission-1");
+    expect(forfaits[0].days).toBe(0);
+    expect(forfaits[0].amount).toBe(450000);
+    // Facturé le 31/08 à 30 jours.
+    expect(forfaits[0].dueAt).toBe("2026-09-30");
+  });
+
+  it("signale un forfait payé en retard", () => {
+    const [invoice] = groupAwaitingInvoices([], "2026-09-15", [
+      forfait({ billedAt: "2026-06-30" }),
+    ]);
+    expect(invoice.dueAt).toBe("2026-07-30");
+    expect(invoice.late).toBe(true);
+  });
+
+  it("range un forfait sans date de facture au mois de son rattachement", () => {
+    const [invoice] = groupAwaitingInvoices([], "2026-09-15", [
+      forfait({ billedAt: null, date: "2026-07-15" }),
+    ]);
+    expect(invoice.month).toBe("2026-07");
+    expect(invoice.dueAt).toBeNull();
   });
 });

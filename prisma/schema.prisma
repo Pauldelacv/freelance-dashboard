@@ -35,11 +35,18 @@ model Mission {
   id            String   @id @default(cuid())
   clientId      String
   title         String
-  rate          Int? // TJM spécifique, sinon celui du client
+  billingType   String   @default("regie") // regie (TJM × jours) | forfait (montant unique)
+  rate          Int? // TJM spécifique, sinon celui du client — régie uniquement
+  forfaitAmount Int? // montant convenu, en centimes — forfait uniquement
   startDate     String?
   endDate       String?
   estimatedDays Float?
   status        String   @default("active") // active | done | paused
+  // Statut de facturation du forfait, sur le modèle du WorkDay : en régie ce
+  // sont les jours qui le portent, et ces trois champs restent inertes.
+  billing       String   @default("pending") // pending | invoiced | paid
+  billedAt      String? // date de la facture Indy, base du prévisionnel
+  paidAt        String?
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -48,6 +55,7 @@ model Mission {
   workDays WorkDay[]
 
   @@index([clientId, status])
+  @@index([billingType, billing])
 }
 
 model WorkDay {

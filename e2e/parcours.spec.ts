@@ -160,6 +160,53 @@ test.describe("cœur du produit", () => {
     await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
   });
 
+  test("suit une mission au forfait jusqu'à l'encaissement", async ({ page }) => {
+    // Un forfait fait du CA sans qu'aucun jour ne soit coché : c'est tout
+    // l'objet de la mission au forfait, et rien dans le modèle en régie ne
+    // savait le représenter.
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Forfait");
+    await page.getByLabel("TJM (€)").fill("500");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await page.getByRole("link", { name: /Client Forfait/ }).click();
+
+    await page.getByRole("button", { name: "Nouvelle mission" }).first().click();
+    const formulaire = page.getByRole("dialog");
+    await formulaire.getByLabel("Intitulé").fill("Refonte au forfait");
+    await formulaire.getByRole("button", { name: "Forfait (montant unique)" }).click();
+
+    // Un forfait sans montant ne serait ni du CA ni une facture : l'envoi est
+    // refusé, et la saisie déjà faite reste à l'écran.
+    await formulaire.getByRole("button", { name: "Créer la mission" }).click();
+    await expect(formulaire).toBeVisible();
+    await expect(formulaire.getByLabel("Intitulé")).toHaveValue("Refonte au forfait");
+
+    await formulaire.getByLabel("Montant du forfait (€)").fill("4500");
+    await formulaire.getByRole("button", { name: "Créer la mission" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    const ligne = page.getByRole("listitem").filter({ hasText: "Refonte au forfait" });
+    await expect(ligne).toContainText("4 500,00 €");
+    await expect(ligne).toContainText("À facturer");
+
+    await ligne.getByRole("button", { name: "Marquer facturé" }).click();
+    await expect(ligne).toContainText("Facturé");
+
+    // Et la facture se pointe depuis l'accueil, comme un mois de régie.
+    await page.goto("/");
+    const facture = page.getByRole("listitem").filter({ hasText: "Refonte au forfait" });
+    await expect(facture).toContainText("4 500,00 €");
+    await facture.getByRole("button", { name: "Encaissé", exact: true }).click();
+    await expect(facture).toHaveCount(0);
+
+    await page.goto("/clients");
+    await page.getByRole("link", { name: /Client Forfait/ }).click();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Refonte au forfait" }),
+    ).toContainText("Encaissé");
+  });
+
   test("pointe un encaissement depuis le tableau de bord", async ({ page }) => {
     // Indy ne dit jamais qu'une facture est payée : sans ce geste, « encaissé »
     // reste à zéro. Le pointage doit donc marcher depuis l'écran d'accueil,

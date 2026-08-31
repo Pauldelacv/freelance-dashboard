@@ -98,12 +98,15 @@ export function YearHeatmap({
   entries,
   today,
   chargeRate,
+  forfaitRevenue,
 }: {
   year: number;
   entries: CalendarEntry[];
   today: string;
   /** Taux de cotisations des réglages, pour le net estimé de l'année. */
   chargeRate: number;
+  /** CA des missions au forfait de l'année : elles n'ont aucune case. */
+  forfaitRevenue: number;
 }) {
   const holidays = holidaysOfYear(year);
 
@@ -115,7 +118,7 @@ export function YearHeatmap({
   }
 
   const businessDays = businessDaysInYear(year);
-  const revenue = totalRevenue(entries);
+  const revenue = totalRevenue(entries) + forfaitRevenue;
   const worked = workedDays(entries);
   const billable = billableDays(entries);
   const occupancy = occupancyRate(entries, businessDays);
@@ -211,6 +214,11 @@ export function YearHeatmap({
                 </span>{" "}
                 net estimé
                 <span className="text-subtle-foreground"> · {formatPercent(chargeRate)}</span>
+                {forfaitRevenue > 0 ? (
+                  <span className="text-subtle-foreground block">
+                    dont {formatMoneyShort(forfaitRevenue)} au forfait
+                  </span>
+                ) : null}
               </>
             }
             testId="year-revenue"

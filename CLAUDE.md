@@ -71,11 +71,18 @@ model Mission {
   id          String   @id @default(cuid())
   clientId    String
   title       String
-  rate        Int?     // TJM spécifique, sinon celui du client
+  billingType String   @default("regie")  // regie (TJM × jours) | forfait (montant unique)
+  rate        Int?     // TJM spécifique, sinon celui du client — régie
+  forfaitAmount Int?   // montant convenu, en centimes — forfait
   startDate   String?
   endDate     String?
   estimatedDays Float?
   status      String   @default("active") // active | done | paused
+  // Statut de facturation du forfait, sur le modèle du WorkDay. En régie, ce
+  // sont les jours qui le portent et ces trois champs restent inertes.
+  billing     String   @default("pending") // pending | invoiced | paid
+  billedAt    String?
+  paidAt      String?
   client      Client   @relation(fields: [clientId], references: [id])
   workDays    WorkDay[]
 }
@@ -158,17 +165,20 @@ model Setting {
 ### 4.1 Calendrier des jours travaillés — _cœur du produit_
 
 - Grille mensuelle, navigation mois précédent/suivant, raccourcis clavier `←`/`→`.
-- **Clic sur un jour = coché/décoché** avec le client actif (sélecteur en haut). **Shift+clic** = demi-journée. **Clic-glissé** = cocher une plage.
+- **Clic sur un jour = coché/décoché** avec le client actif (sélecteur en haut). **Shift+clic** = demi-journée. **Clic-glissé** = cocher un **rectangle** de cases (colonnes × semaines), et non une plage de dates : c'est ce qui permet de poser les jours ouvrés de plusieurs semaines sans les week-ends. Géométrie isolée dans `lib/calendar-grid.ts`, testée.
 - Pastille de couleur du client, montant du jour affiché au survol.
 - Week-ends et **jours fériés français** grisés (calcul local, sans API externe) mais cochables.
 - Types de journée : facturable, interne (admin/proso), formation, congé.
-- Totaux du mois en pied de calendrier : jours facturables, CA du mois, taux d'occupation (jours travaillés / jours ouvrés).
+- Totaux du mois en pied de calendrier : jours facturables, CA du mois **et son net estimé** (taux de cotisations des réglages, comme sur le tableau de bord), taux d'occupation (jours travaillés / jours ouvrés). Idem sur la vue annuelle. Le CA inclut les **forfaits rattachés au mois**, signalés à part : ils n'occupent aucune case, mais les omettre ferait dire deux chiffres différents à cet écran et au tableau de bord.
 - Vue annuelle « heatmap » en lecture seule.
 
 ### 4.2 Clients & TJM
 
 - CRUD client : nom, société, contact, **TJM par défaut**, couleur, délai de paiement, statut, notes.
-- Missions rattachées avec TJM spécifique qui écrase celui du client.
+- Missions rattachées, **en régie ou au forfait** :
+  - _régie_ — TJM spécifique qui écrase celui du client ; le CA vient des jours cochés ;
+  - _forfait_ — un **montant unique** convenu d'avance, indépendant des jours passés, avec son propre statut de facturation (à facturer → facturé → encaissé) et son récapitulatif copiable vers Indy. Un seul paiement par mission ; les jalons (acompte / solde) restent hors périmètre.
+- Un forfait n'ayant pas de jour de travail, sa **date de rattachement** décide du mois où il compte : date de facture, sinon fin de mission, sinon début, sinon création (`lib/calculations/missions.ts`, testé).
 - Fiche client : CA total, CA de l'année, jours travaillés, TJM moyen réel, montant à facturer et encaissements attendus.
 - Le TJM est **figé sur chaque `WorkDay`** à la saisie : changer le TJM d'un client ne réécrit pas l'historique.
 
@@ -178,13 +188,13 @@ Aucun moteur de facturation dans l'application : **Indy reste la source de véri
 Ce que le dashboard fait à la place, en restant minimal :
 
 - **Lien direct vers Indy** dans la barre de navigation et sur chaque fiche client.
-- Chaque `WorkDay` porte un statut de facturation : _à facturer → facturé → encaissé_.
-- Action **« Clôturer le mois »** sur une fiche client : marque d'un coup tous les jours de la période comme facturés, avec un récapitulatif copiable (nombre de jours, TJM, total HT) à coller dans Indy.
-- Le dashboard affiche donc en permanence : **à facturer**, **facturé non encaissé**, **encaissé** — sans jamais dupliquer une facture.
+- Chaque `WorkDay` porte un statut de facturation : _à facturer → facturé → encaissé_. Une **mission au forfait** porte le sien, pour les mêmes trois états.
+- Action **« Clôturer le mois »** sur une fiche client : marque d'un coup tous les jours de la période comme facturés, avec un récapitulatif copiable (nombre de jours, TJM, total HT) à coller dans Indy. Une mission au forfait se clôture seule, avec son propre récapitulatif (intitulé, montant convenu) — pas de « nombre de jours × TJM » qui n'aurait aucun sens.
+- Le dashboard affiche donc en permanence : **à facturer**, **facturé non encaissé**, **encaissé** — sans jamais dupliquer une facture. Une facture au forfait s'y pointe comme un mois de régie, ligne à part.
 
 ### 4.4 Finances
 
-- CA **prévisionnel** (jours cochés à facturer) vs **facturé** vs **encaissé**.
+- CA **prévisionnel** (jours cochés à facturer) vs **facturé** vs **encaissé**, forfaits compris.
 - Graphiques : CA mensuel sur 12 mois, répartition par client, évolution du TJM moyen réel.
 - Suivi des dépenses et estimation des charges : **module optionnel désactivé par défaut** (Indy le fait déjà). Activable dans les réglages si le besoin apparaît.
 
@@ -248,7 +258,7 @@ En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à r
 
 ### 5.3 Prévisionnel de trésorerie (3 mois)
 
-- Alimenté par les `WorkDay` : les jours _à facturer_ deviennent des encaissements attendus à `fin de mois + délai de paiement du client`, les jours _facturés_ à `date de facture + délai`.
+- Alimenté par les `WorkDay` : les jours _à facturer_ deviennent des encaissements attendus à `fin de mois + délai de paiement du client`, les jours _facturés_ à `date de facture + délai`. Une **mission au forfait** entre par la même porte, avec son montant unique et sa date de rattachement.
 - Courbe des encaissements attendus semaine par semaine sur 12 semaines, empilée par client.
 - Distinction visuelle entre **certain** (déjà facturé dans Indy) et **probable** (jours travaillés pas encore facturés).
 - Option : inclure le pipeline pondéré en zone hachurée, pour voir le creux à venir.
@@ -308,6 +318,7 @@ Contrainte : **déploiement en quelques clics**, sans configuration exotique.
 - `.env.example` documenté.
 - Route `GET /api/health` renvoyant `{ ok: true }` → **healthcheck Coolify**, sans session ni accès base.
 - Migrations appliquées **au démarrage du conteneur** par `scripts/migrate.mjs` : un redéploiement suffit, aucune commande manuelle. Ce script remplace `prisma migrate deploy`, qui exigerait d'embarquer ~150 Mo de CLI Prisma (Studio compris) dans l'image ; il écrit dans `_prisma_migrations` au format exact de Prisma (checksum = sha256 du `migration.sql`), donc `prisma migrate status` reste juste en local. Une migration déjà appliquée puis modifiée fait échouer le démarrage au lieu de corrompre la base.
+  Les **contraintes de clés étrangères sont désactivées le temps des migrations**, comme le fait le moteur de Prisma : SQLite ne sachant pas modifier une colonne, Prisma reconstruit la table (`DROP` puis `RENAME`), et ce `DROP` déclencherait sinon les `ON DELETE SET NULL` des tables qui la référencent — les jours travaillés perdraient leur mission, sans un mot. Le `PRAGMA foreign_keys` du fichier de migration, lui, ne peut rien : SQLite l'ignore à l'intérieur d'une transaction. Un `foreign_key_check` en sortie refuse de rendre la main sur une base incohérente. Régression couverte par `scripts/migrate.test.ts`, sur une vraie base.
 
 ### Variables d'environnement
 
@@ -404,7 +415,10 @@ Chaque phase = une série de commits sur `claude/freelance-dashboard-sehxjx`, te
 
 - Toujours développer sur `claude/freelance-dashboard-sehxjx`.
 - Avant commit : `npm run check` (lint + typecheck + tests). Les parcours
-  critiques se rejouent avec `npm run e2e`.
+  critiques se rejouent avec `npm run e2e`. GitHub Actions rejoue les deux à
+  chaque poussée, plus un `docker build` — voir `.github/workflows/ci.yml`.
+  `DATABASE_URL` y est posée pour tout le workflow : `prisma generate` tourne en
+  postinstall et la lit, sans elle `npm ci` échoue avant le premier test.
 - Préférer une modification de fichier vérifiée (l'outil échoue si le motif a
   changé) à un remplacement de chaîne silencieux : Prettier réordonne les classes
   Tailwind, et un `replace` peut ne rien remplacer sans prévenir.

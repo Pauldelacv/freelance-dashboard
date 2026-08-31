@@ -92,6 +92,20 @@ async function seedSource(db: PrismaClient) {
       estimatedDays: 12.5,
     },
   });
+  // Une mission au forfait : son montant et son statut de facturation ne
+  // passent par aucun jour travaillé, ils ne tiennent qu'à cette ligne.
+  await db.mission.create({
+    data: {
+      id: "mission-forfait",
+      clientId: "client-sud",
+      title: "Audit au forfait",
+      billingType: "forfait",
+      forfaitAmount: 450000,
+      billing: "invoiced",
+      billedAt: "2026-08-31",
+      endDate: "2026-08-28",
+    },
+  });
   await db.workDay.createMany({
     data: [
       {
@@ -199,7 +213,7 @@ describe("aller-retour export → import", () => {
     const counts = await restoreBackup(target, parsed.data);
     expect(counts).toEqual({
       clients: 2,
-      missions: 1,
+      missions: 2,
       workDays: 3,
       prospects: 1,
       expenses: 1,
@@ -230,6 +244,9 @@ describe("aller-retour export → import", () => {
     expect(after.clients.some((row) => row.id === "client-a-effacer")).toBe(false);
     expect(after.workDays.some((row) => row.id === "jour-a-effacer")).toBe(false);
     expect(after.workDays.find((row) => row.id === "jour-1")?.missionId).toBe("mission-refonte");
+    const forfait = after.missions.find((row) => row.id === "mission-forfait");
+    expect(forfait?.forfaitAmount).toBe(450000);
+    expect(forfait?.billing).toBe("invoiced");
 
     expect(summarizeCounts(counts)).toContain("2 clients");
   });

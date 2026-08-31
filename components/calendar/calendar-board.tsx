@@ -91,6 +91,7 @@ export function CalendarBoard({
   today,
   defaultFraction,
   chargeRate,
+  forfaitRevenue,
   revenueTarget,
   daysTarget,
 }: {
@@ -102,6 +103,8 @@ export function CalendarBoard({
   defaultFraction: number;
   /** Taux de cotisations des réglages, pour le net estimé du mois. */
   chargeRate: number;
+  /** CA des missions au forfait rattachées au mois : il n'a aucune case. */
+  forfaitRevenue: number;
   /** Objectifs du mois affiché — ceux du mois s'il en porte, sinon les réglages. */
   revenueTarget: number | null;
   daysTarget: number | null;
@@ -261,7 +264,10 @@ export function CalendarBoard({
   }, [dates, drag, leading]);
 
   const monthEntries = optimisticEntries;
-  const revenue = totalRevenue(monthEntries);
+  // Un forfait n'occupe aucune case du calendrier, mais c'est bien du CA du
+  // mois : l'omettre ici ferait dire deux chiffres différents à cet écran et au
+  // tableau de bord.
+  const revenue = totalRevenue(monthEntries) + forfaitRevenue;
   // Le net suit le CA optimiste : cocher un jour doit déplacer les deux
   // chiffres du même clic, sans attendre le serveur.
   const net = netFromRevenue(revenue, chargeRate);
@@ -538,6 +544,11 @@ export function CalendarBoard({
                 </span>{" "}
                 net estimé
                 <span className="text-subtle-foreground"> · {formatPercent(chargeRate)}</span>
+                {forfaitRevenue > 0 ? (
+                  <span className="text-subtle-foreground block">
+                    dont {formatMoneyShort(forfaitRevenue)} au forfait, hors calendrier
+                  </span>
+                ) : null}
               </>
             }
             hint={
@@ -582,7 +593,7 @@ export function CalendarBoard({
           <Kbd>Maj</Kbd>+<Kbd>Clic</Kbd> demi-journée
         </span>
         <span className="flex items-center gap-1">
-          <Kbd>Clic-glissé</Kbd> rectangle de jours — du lundi au vendredi sans les week-ends
+          <Kbd>Clic-glissé</Kbd> rectangle de jours (sans les week-ends)
         </span>
         <span className="flex items-center gap-1">
           <Kbd>←</Kbd>

@@ -54,11 +54,18 @@ const missionSchema = z.object({
   id: z.string().min(1),
   clientId: z.string().min(1),
   title: text,
+  // Champs du forfait, arrivés après la version 1 du format : leurs valeurs par
+  // défaut relisent une sauvegarde antérieure sans la refuser.
+  billingType: z.string().default("regie"),
   rate: optionalInt,
+  forfaitAmount: optionalInt,
   startDate: optionalText,
   endDate: optionalText,
   estimatedDays: optionalFloat,
   status: z.string().default("active"),
+  billing: z.string().default("pending"),
+  billedAt: optionalText,
+  paidAt: optionalText,
   notes: optionalText,
   createdAt: timestamp,
   updatedAt: timestamp,

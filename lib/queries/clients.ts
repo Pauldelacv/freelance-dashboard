@@ -8,6 +8,13 @@ import {
   workedDays,
   type WorkDayLike,
 } from "@/lib/calculations/revenue";
+import {
+  forfaitDate,
+  forfaitRevenueByStatus,
+  forfaitRevenueIn,
+  missionAmount,
+  type MissionLike,
+} from "@/lib/calculations/missions";
 
 export interface ClientSummary {
   id: string;
@@ -20,7 +27,7 @@ export interface ClientSummary {
   status: string;
   paymentTerms: number;
   notes: string | null;
-  /** CA facturable de l'année en cours. */
+  /** CA facturable de l'année en cours — jours travaillés et forfaits. */
   yearRevenue: number;
   totalRevenue: number;
   totalDays: number;
@@ -34,9 +41,10 @@ export interface ClientSummary {
 
 export async function listClientSummaries(): Promise<ClientSummary[]> {
   const year = todayIso().slice(0, 4);
-  const [clients, days] = await Promise.all([
+  const [clients, days, missions] = await Promise.all([
     prisma.client.findMany({ orderBy: [{ status: "asc" }, { name: "asc" }] }),
     prisma.workDay.findMany({ where: { clientId: { not: null } } }),
+    prisma.mission.findMany({ where: { billingType: "forfait" } }),
   ]);
 
   const byClient = new Map<string, WorkDayLike[]>();
@@ -47,10 +55,22 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
     else byClient.set(day.clientId, [day]);
   }
 
+  const missionsByClient = new Map<string, MissionLike[]>();
+  for (const mission of missions) {
+    const list = missionsByClient.get(mission.clientId);
+    if (list) list.push(mission);
+    else missionsByClient.set(mission.clientId, [mission]);
+  }
+
   return clients.map((client) => {
     const clientDays = byClient.get(client.id) ?? [];
     const yearDays = clientDays.filter((day) => day.date.startsWith(year));
     const breakdown = revenueByBillingStatus(clientDays);
+
+    // Un client peut n'avoir aucun jour coché et tout de même du CA : c'est
+    // exactement le cas d'une mission vendue au forfait.
+    const clientMissions = missionsByClient.get(client.id) ?? [];
+    const forfaits = forfaitRevenueByStatus(clientMissions);
 
     return {
       id: client.id,
@@ -63,12 +83,12 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
       status: client.status,
       paymentTerms: client.paymentTerms,
       notes: client.notes,
-      yearRevenue: totalRevenue(yearDays),
-      totalRevenue: breakdown.total,
+      yearRevenue: totalRevenue(yearDays) + forfaitRevenueIn(clientMissions, year),
+      totalRevenue: breakdown.total + forfaits.total,
       totalDays: billableDays(clientDays),
       averageRate: averageRealRate(clientDays),
-      toInvoice: breakdown.pending,
-      awaitingPayment: breakdown.invoiced,
+      toInvoice: breakdown.pending + forfaits.pending,
+      awaitingPayment: breakdown.invoiced + forfaits.invoiced,
       lastWorkedDate:
         clientDays.length > 0
           ? clientDays.reduce((latest, day) => (day.date > latest ? day.date : latest), "")
@@ -78,16 +98,34 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
   });
 }
 
+/** Une mission telle que la fiche client l'affiche et la modifie. */
+export interface MissionRow {
+  id: string;
+  title: string;
+  billingType: string;
+  /** TJM propre à la mission, en régie. */
+  rate: number | null;
+  /** Montant convenu, au forfait. */
+  forfaitAmount: number | null;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  estimatedDays: number | null;
+  billing: string;
+  billedAt: string | null;
+  paidAt: string | null;
+  notes: string | null;
+  /** Date à laquelle le forfait compte — `null` en régie. */
+  countedOn: string | null;
+  /** Jours cochés rattachés à la mission : ce qui interdit la suppression. */
+  workDayCount: number;
+}
+
 export interface ClientDetail extends ClientSummary {
   workedDaysCount: number;
-  missions: {
-    id: string;
-    title: string;
-    rate: number | null;
-    status: string;
-    startDate: string | null;
-    endDate: string | null;
-  }[];
+  missions: MissionRow[];
+  /** CA des missions au forfait, réparti par statut de facturation. */
+  forfaits: { pending: number; invoiced: number; paid: number; total: number };
   /** Jours du client, du plus récent au plus ancien. */
   days: {
     id: string;
@@ -117,7 +155,10 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
   const client = await prisma.client.findUnique({
     where: { id },
     include: {
-      missions: { orderBy: { title: "asc" } },
+      missions: {
+        orderBy: [{ status: "asc" }, { title: "asc" }],
+        include: { _count: { select: { workDays: true } } },
+      },
       workDays: { orderBy: { date: "desc" } },
     },
   });
@@ -126,6 +167,7 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
   const days = client.workDays as WorkDayLike[];
   const year = todayIso().slice(0, 4);
   const breakdown = revenueByBillingStatus(days);
+  const forfaits = forfaitRevenueByStatus(client.missions);
 
   interface MonthAccumulator {
     pendingDays: number;
@@ -175,22 +217,34 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
     status: client.status,
     paymentTerms: client.paymentTerms,
     notes: client.notes,
-    yearRevenue: totalRevenue(days.filter((day) => day.date.startsWith(year))),
-    totalRevenue: breakdown.total,
+    yearRevenue:
+      totalRevenue(days.filter((day) => day.date.startsWith(year))) +
+      forfaitRevenueIn(client.missions, year),
+    totalRevenue: breakdown.total + forfaits.total,
     totalDays: billableDays(days),
     averageRate: averageRealRate(days),
-    toInvoice: breakdown.pending,
-    awaitingPayment: breakdown.invoiced,
+    toInvoice: breakdown.pending + forfaits.pending,
+    awaitingPayment: breakdown.invoiced + forfaits.invoiced,
     lastWorkedDate: client.workDays[0]?.date ?? null,
     workDayCount: client.workDays.length,
     workedDaysCount: workedDays(days),
+    forfaits,
     missions: client.missions.map((mission) => ({
       id: mission.id,
       title: mission.title,
+      billingType: mission.billingType,
       rate: mission.rate,
+      forfaitAmount: mission.forfaitAmount,
       status: mission.status,
       startDate: mission.startDate,
       endDate: mission.endDate,
+      estimatedDays: mission.estimatedDays,
+      billing: mission.billing,
+      billedAt: mission.billedAt,
+      paidAt: mission.paidAt,
+      notes: mission.notes,
+      countedOn: missionAmount(mission) > 0 ? forfaitDate(mission) : null,
+      workDayCount: mission._count.workDays,
     })),
     days: client.workDays.map((day) => ({
       id: day.id,

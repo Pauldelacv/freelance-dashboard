@@ -4,9 +4,11 @@ import {
   buildForecast,
   forecastTotals,
   type CashflowDay,
+  type CashflowForfait,
   type PipelineEntry,
   type WeekBucket,
 } from "@/lib/calculations/cashflow";
+import { forfaitDate, missionAmount } from "@/lib/calculations/missions";
 import { OPEN_STAGES, weightedValue } from "@/lib/calculations/pipeline";
 
 export interface CashflowData {
@@ -22,9 +24,13 @@ export interface CashflowData {
 export async function getCashflow(): Promise<CashflowData> {
   const today = todayIso();
 
-  const [days, prospects, clients] = await Promise.all([
+  const [days, missions, prospects, clients] = await Promise.all([
     prisma.workDay.findMany({
       where: { type: "billable", billing: { in: ["pending", "invoiced"] } },
+      include: { client: { select: { name: true, color: true, paymentTerms: true } } },
+    }),
+    prisma.mission.findMany({
+      where: { billingType: "forfait", billing: { in: ["pending", "invoiced"] } },
       include: { client: { select: { name: true, color: true, paymentTerms: true } } },
     }),
     prisma.prospect.findMany({ where: { stage: { in: [...OPEN_STAGES] } } }),
@@ -48,6 +54,21 @@ export async function getCashflow(): Promise<CashflowData> {
     paymentTerms: day.client?.paymentTerms ?? 30,
   }));
 
+  // Un forfait entre au prévisionnel comme un jour : un montant, une date de
+  // rattachement, le délai de paiement du client.
+  const forfaits: CashflowForfait[] = missions
+    .filter((mission) => missionAmount(mission) > 0)
+    .map((mission) => ({
+      date: forfaitDate(mission),
+      amount: missionAmount(mission),
+      billing: mission.billing,
+      billedAt: mission.billedAt,
+      clientId: mission.clientId,
+      clientName: mission.client.name,
+      color: mission.client.color,
+      paymentTerms: mission.client.paymentTerms,
+    }));
+
   // Une affaire gagnée se facture rarement le jour même : on place la valeur
   // pondérée six semaines après la prochaine action prévue.
   const pipeline: PipelineEntry[] = prospects
@@ -59,7 +80,7 @@ export async function getCashflow(): Promise<CashflowData> {
     }))
     .filter((entry) => entry.weighted > 0);
 
-  const weeks = buildForecast(cashflowDays, today);
+  const weeks = buildForecast(cashflowDays, today, { forfaits });
   const pipelineWeeks = buildForecast([], today, { pipeline });
 
   return {
