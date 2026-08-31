@@ -26,6 +26,7 @@ import {
   monthKey,
 } from "@/lib/dates";
 import { businessDaysInMonth, holidaysOfYear } from "@/lib/holidays";
+import { rectangleBetween } from "@/lib/calendar-grid";
 import { DAY_TYPES, occupancyRate, totalRevenue, workedDays } from "@/lib/calculations/revenue";
 import type { CalendarEntry } from "@/lib/queries/calendar";
 import { setWorkDayRangeAction, toggleWorkDayAction } from "@/app/(app)/calendrier/actions";
@@ -242,20 +243,17 @@ export function CalendarBoard({
       const current = dragRef.current;
       setDrag(null);
       if (!current) return;
-      const [from, to] = [current.from, current.to].sort();
-      if (from === to) return; // simple clic : géré par onClick
-      const selected = dates.filter((date) => date >= from && date <= to);
-      commitRange(selected, current.clear);
+      if (current.from === current.to) return; // simple clic : géré par onClick
+      commitRange(rectangleBetween(dates, leading, current.from, current.to), current.clear);
     }
     window.addEventListener("pointerup", onPointerUp);
     return () => window.removeEventListener("pointerup", onPointerUp);
-  }, [commitRange, dates]);
+  }, [commitRange, dates, leading]);
 
   const dragSelection = useMemo(() => {
     if (!drag) return new Set<string>();
-    const [from, to] = [drag.from, drag.to].sort();
-    return new Set(dates.filter((date) => date >= from && date <= to));
-  }, [dates, drag]);
+    return new Set(rectangleBetween(dates, leading, drag.from, drag.to));
+  }, [dates, drag, leading]);
 
   const monthEntries = optimisticEntries;
   const revenue = totalRevenue(monthEntries);
@@ -567,7 +565,7 @@ export function CalendarBoard({
           <Kbd>Maj</Kbd>+<Kbd>Clic</Kbd> demi-journée
         </span>
         <span className="flex items-center gap-1">
-          <Kbd>Clic-glissé</Kbd> plage de jours
+          <Kbd>Clic-glissé</Kbd> rectangle de jours — du lundi au vendredi sans les week-ends
         </span>
         <span className="flex items-center gap-1">
           <Kbd>←</Kbd>

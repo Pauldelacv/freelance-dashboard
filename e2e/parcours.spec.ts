@@ -98,6 +98,27 @@ test.describe("cœur du produit", () => {
     await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
   });
 
+  test("coche les jours ouvrés de plusieurs semaines sans les week-ends", async ({ page }) => {
+    // Février 2027 commence un lundi. Du lundi 1er au vendredi 12, le
+    // glissement traverse deux lignes : la sélection est le rectangle des cinq
+    // premières colonnes, pas la suite des jours — les 6, 7, 13 et 14 restent
+    // vierges.
+    await page.goto("/calendrier?m=2027-02");
+    await page.locator('[data-date="2027-02-01"]').hover();
+    await page.mouse.down();
+    await page.locator('[data-date="2027-02-12"]').hover();
+    await page.mouse.up();
+
+    await expect(page.getByTestId("total-days")).toHaveText("10");
+    await expect(page.getByTestId("total-revenue")).toHaveText("6 000,00 €");
+    await expect(page.locator('[data-date="2027-02-06"]')).not.toContainText("Client E2E");
+    await expect(page.locator('[data-date="2027-02-07"]')).not.toContainText("Client E2E");
+
+    // Et le serveur en a gardé exactement autant.
+    await page.reload();
+    await expect(page.getByTestId("total-days")).toHaveText("10");
+  });
+
   test("bascule sur la vue annuelle en lecture seule", async ({ page }) => {
     await page.goto("/calendrier?m=2026-10");
     await page.getByRole("link", { name: "Année" }).click();
