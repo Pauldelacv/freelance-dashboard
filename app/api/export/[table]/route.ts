@@ -19,6 +19,17 @@ const BILLING: Record<string, string> = {
   paid: "encaissé",
 };
 
+const MISSION_BILLING_TYPES: Record<string, string> = {
+  regie: "régie",
+  forfait: "forfait",
+};
+
+const MISSION_STATUSES: Record<string, string> = {
+  active: "en cours",
+  paused: "en pause",
+  done: "terminée",
+};
+
 const STAGES: Record<string, string> = {
   contacted: "contacté",
   quoted: "devis envoyé",
@@ -78,6 +89,50 @@ async function buildCsv(table: string): Promise<{ csv: string } | null> {
             client.paymentTerms,
             client.status,
             client.notes,
+          ]),
+        ),
+      };
+    }
+    case "missions": {
+      // Le CA d'un forfait ne passe par aucun jour travaillé : sans cette
+      // table, il manquerait à tout export lu en tableur.
+      const missions = await prisma.mission.findMany({
+        orderBy: [{ clientId: "asc" }, { title: "asc" }],
+        include: { client: { select: { name: true } } },
+      });
+      return {
+        csv: toCsv(
+          [
+            "client",
+            "mission",
+            "facturation",
+            "TJM",
+            "montant du forfait",
+            "jours estimés",
+            "début",
+            "fin",
+            "statut",
+            "état de facturation",
+            "facturé le",
+            "encaissé le",
+            "notes",
+          ],
+          missions.map((mission): CsvValue[] => [
+            mission.client.name,
+            mission.title,
+            MISSION_BILLING_TYPES[mission.billingType] ?? mission.billingType,
+            mission.rate === null ? "" : csvMoney(mission.rate),
+            mission.forfaitAmount === null ? "" : csvMoney(mission.forfaitAmount),
+            mission.estimatedDays === null ? "" : csvNumber(mission.estimatedDays),
+            mission.startDate,
+            mission.endDate,
+            MISSION_STATUSES[mission.status] ?? mission.status,
+            // Une mission en régie n'a pas d'état propre : ce sont ses jours qui
+            // le portent, colonne « facturation » de l'export des jours.
+            mission.billingType === "forfait" ? (BILLING[mission.billing] ?? mission.billing) : "",
+            mission.billingType === "forfait" ? mission.billedAt : "",
+            mission.billingType === "forfait" ? mission.paidAt : "",
+            mission.notes,
           ]),
         ),
       };

@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDayMonth } from "@/lib/dates";
 import type { AwaitingInvoice } from "@/lib/calculations/invoices";
 import { markInvoicePaidAction, markInvoiceUnpaidAction } from "@/app/(app)/actions";
+import { setMissionBillingAction } from "@/app/(app)/clients/[id]/mission-actions";
 
 /**
  * Pointage des factures émises. Indy ne nous dit pas quand un virement arrive :
@@ -16,7 +17,8 @@ import { markInvoicePaidAction, markInvoiceUnpaidAction } from "@/app/(app)/acti
  *
  * Une ligne = une facture, c'est-à-dire un client et un mois — la même unité
  * que la clôture de mois qui l'a créée. Pointer jour par jour n'aurait aucun
- * sens : on encaisse une facture, pas une journée.
+ * sens : on encaisse une facture, pas une journée. Une mission au forfait fait
+ * ligne à elle seule : son statut est porté par la mission, pas par des jours.
  */
 export function PaymentInbox({ items }: { items: AwaitingInvoice[] }) {
   const [pending, startTransition] = useTransition();
@@ -25,6 +27,19 @@ export function PaymentInbox({ items }: { items: AwaitingInvoice[] }) {
   const [undo, setUndo] = useState<AwaitingInvoice | null>(null);
 
   if (items.length === 0 && !undo) return null;
+
+  /** Le pointage vise la mission, ou le mois de jours travaillés du client. */
+  async function markPaid(item: AwaitingInvoice, paid: boolean) {
+    if (item.kind === "mission" && item.missionId) {
+      await setMissionBillingAction({
+        id: item.missionId,
+        billing: paid ? "paid" : "invoiced",
+      });
+      return;
+    }
+    const input = { clientId: item.clientId, month: item.month };
+    await (paid ? markInvoicePaidAction(input) : markInvoiceUnpaidAction(input));
+  }
 
   return (
     <div className="border-border border-t">
@@ -49,7 +64,9 @@ export function PaymentInbox({ items }: { items: AwaitingInvoice[] }) {
               <p className="text-subtle-foreground truncate text-xs">
                 <span className="capitalize">{item.monthLabel}</span>
                 <span className="hidden sm:inline">
-                  {` · ${item.days.toLocaleString("fr-FR")} j`}
+                  {item.kind === "mission"
+                    ? ` · ${item.label ?? "forfait"}`
+                    : ` · ${item.days.toLocaleString("fr-FR")} j`}
                 </span>
                 {item.dueAt ? ` · éch. ${formatDayMonth(item.dueAt)}` : ""}
               </p>
@@ -61,7 +78,7 @@ export function PaymentInbox({ items }: { items: AwaitingInvoice[] }) {
               disabled={pending}
               onClick={() =>
                 startTransition(async () => {
-                  await markInvoicePaidAction({ clientId: item.clientId, month: item.month });
+                  await markPaid(item, true);
                   setUndo(item);
                 })
               }
@@ -83,7 +100,7 @@ export function PaymentInbox({ items }: { items: AwaitingInvoice[] }) {
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                await markInvoiceUnpaidAction({ clientId: undo.clientId, month: undo.month });
+                await markPaid(undo, false);
                 setUndo(null);
               })
             }

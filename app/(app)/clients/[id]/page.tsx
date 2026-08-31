@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClientFormDialog } from "@/components/clients/client-form-dialog";
 import { MonthClosing } from "@/components/clients/month-closing";
+import { MissionList } from "@/components/clients/mission-list";
 import { getClientDetail } from "@/lib/queries/clients";
 import { getSettings } from "@/lib/settings";
 import { formatMoney, formatMoneyShort } from "@/lib/money";
@@ -97,7 +98,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             <CardTitle>Facturation par mois</CardTitle>
             <p className="text-muted-foreground text-sm">
               La facture se crée dans Indy. Ici on suit seulement l&apos;état : à facturer → facturé
-              → encaissé.
+              → encaissé. Les missions au forfait se suivent une par une, plus bas.
             </p>
           </CardHeader>
           <CardContent>
@@ -137,6 +138,28 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 {client.notes}
               </p>
             ) : null}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Missions</CardTitle>
+            <p className="text-muted-foreground text-sm">
+              En régie, la mission ne porte qu&apos;un TJM : le CA vient des jours cochés. Au
+              forfait, elle porte le montant convenu — un seul paiement, quel que soit le nombre de
+              jours passés.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <MissionList
+              clientId={client.id}
+              clientName={client.name}
+              clientRate={client.defaultRate}
+              missions={client.missions}
+              indyUrl={settings.indyUrl}
+            />
           </CardContent>
         </Card>
       </section>

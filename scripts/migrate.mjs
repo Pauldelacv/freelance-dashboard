@@ -45,7 +45,14 @@ function main() {
 
   const db = new Database(file);
   db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  // Contraintes désactivées le temps des migrations, comme le fait le moteur
+  // de Prisma. SQLite ne sait pas modifier une colonne : Prisma reconstruit
+  // donc la table (CREATE new_X / INSERT SELECT / DROP X / RENAME). Contraintes
+  // actives, ce DROP déclenche les ON DELETE des tables qui la référencent —
+  // les jours travaillés perdraient leur mission au passage, sans un mot.
+  // Le PRAGMA du fichier de migration, lui, ne peut rien : il s'exécute dans la
+  // transaction, où SQLite l'ignore. C'est donc ici, avant le BEGIN.
+  db.pragma("foreign_keys = OFF");
   db.exec(MIGRATIONS_TABLE);
 
   const migrationsDir = join(process.cwd(), "prisma", "migrations");
@@ -98,6 +105,16 @@ function main() {
 
     console.log(`✓ migration appliquée : ${name}`);
     count += 1;
+  }
+
+  // Contrôle de sortie : ce que les contraintes n'ont pas vérifié pendant les
+  // migrations, on le vérifie une fois pour toutes avant de rendre la main.
+  const dangling = db.pragma("foreign_key_check");
+  if (dangling.length > 0) {
+    const tables = [...new Set(dangling.map((row) => row.table))].join(", ");
+    throw new Error(
+      `Références orphelines après migration (${tables}). La base n'est pas cohérente.`,
+    );
   }
 
   console.log(

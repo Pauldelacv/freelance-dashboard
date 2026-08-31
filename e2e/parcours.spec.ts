@@ -68,6 +68,8 @@ test.describe("cœur du produit", () => {
     await expect(jour).toContainText("Client E2E");
     await expect(page.getByTestId("total-revenue")).toHaveText("600,00 €");
     await expect(page.getByTestId("total-days")).toHaveText("1");
+    // Le net estimé suit le CA du mois : 600 € moins 26,1 % de cotisations.
+    await expect(page.getByTestId("total-net")).toHaveText("443,40 €");
 
     // Persistée côté serveur.
     await page.reload();
@@ -96,6 +98,27 @@ test.describe("cœur du produit", () => {
     // 4 jours à 600 € : lundi au jeudi.
     await expect(page.getByTestId("total-days")).toHaveText("4");
     await expect(page.getByTestId("total-revenue")).toHaveText("2 400,00 €");
+  });
+
+  test("coche les jours ouvrés de plusieurs semaines sans les week-ends", async ({ page }) => {
+    // Février 2027 commence un lundi. Du lundi 1er au vendredi 12, le
+    // glissement traverse deux lignes : la sélection est le rectangle des cinq
+    // premières colonnes, pas la suite des jours — les 6, 7, 13 et 14 restent
+    // vierges.
+    await page.goto("/calendrier?m=2027-02");
+    await page.locator('[data-date="2027-02-01"]').hover();
+    await page.mouse.down();
+    await page.locator('[data-date="2027-02-12"]').hover();
+    await page.mouse.up();
+
+    await expect(page.getByTestId("total-days")).toHaveText("10");
+    await expect(page.getByTestId("total-revenue")).toHaveText("6 000,00 €");
+    await expect(page.locator('[data-date="2027-02-06"]')).not.toContainText("Client E2E");
+    await expect(page.locator('[data-date="2027-02-07"]')).not.toContainText("Client E2E");
+
+    // Et le serveur en a gardé exactement autant.
+    await page.reload();
+    await expect(page.getByTestId("total-days")).toHaveText("10");
   });
 
   test("bascule sur la vue annuelle en lecture seule", async ({ page }) => {
@@ -135,6 +158,53 @@ test.describe("cœur du produit", () => {
 
     await page.getByRole("button", { name: "Marquer encaissé" }).click();
     await expect(page.getByText("Encaissé 1 000,00 €")).toBeVisible();
+  });
+
+  test("suit une mission au forfait jusqu'à l'encaissement", async ({ page }) => {
+    // Un forfait fait du CA sans qu'aucun jour ne soit coché : c'est tout
+    // l'objet de la mission au forfait, et rien dans le modèle en régie ne
+    // savait le représenter.
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Forfait");
+    await page.getByLabel("TJM (€)").fill("500");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await page.getByRole("link", { name: /Client Forfait/ }).click();
+
+    await page.getByRole("button", { name: "Nouvelle mission" }).first().click();
+    const formulaire = page.getByRole("dialog");
+    await formulaire.getByLabel("Intitulé").fill("Refonte au forfait");
+    await formulaire.getByRole("button", { name: "Forfait (montant unique)" }).click();
+
+    // Un forfait sans montant ne serait ni du CA ni une facture : l'envoi est
+    // refusé, et la saisie déjà faite reste à l'écran.
+    await formulaire.getByRole("button", { name: "Créer la mission" }).click();
+    await expect(formulaire).toBeVisible();
+    await expect(formulaire.getByLabel("Intitulé")).toHaveValue("Refonte au forfait");
+
+    await formulaire.getByLabel("Montant du forfait (€)").fill("4500");
+    await formulaire.getByRole("button", { name: "Créer la mission" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    const ligne = page.getByRole("listitem").filter({ hasText: "Refonte au forfait" });
+    await expect(ligne).toContainText("4 500,00 €");
+    await expect(ligne).toContainText("À facturer");
+
+    await ligne.getByRole("button", { name: "Marquer facturé" }).click();
+    await expect(ligne).toContainText("Facturé");
+
+    // Et la facture se pointe depuis l'accueil, comme un mois de régie.
+    await page.goto("/");
+    const facture = page.getByRole("listitem").filter({ hasText: "Refonte au forfait" });
+    await expect(facture).toContainText("4 500,00 €");
+    await facture.getByRole("button", { name: "Encaissé", exact: true }).click();
+    await expect(facture).toHaveCount(0);
+
+    await page.goto("/clients");
+    await page.getByRole("link", { name: /Client Forfait/ }).click();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Refonte au forfait" }),
+    ).toContainText("Encaissé");
   });
 
   test("pointe un encaissement depuis le tableau de bord", async ({ page }) => {

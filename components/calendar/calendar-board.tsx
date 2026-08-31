@@ -14,8 +14,9 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Kbd } from "@/components/ui/kbd";
+import { Total } from "@/components/calendar/total";
 import { cn } from "@/lib/utils";
-import { formatMoney, formatMoneyShort } from "@/lib/money";
+import { formatMoney, formatMoneyShort, formatPercent } from "@/lib/money";
 import {
   addMonths,
   daysInMonth,
@@ -26,7 +27,9 @@ import {
   monthKey,
 } from "@/lib/dates";
 import { businessDaysInMonth, holidaysOfYear } from "@/lib/holidays";
+import { rectangleBetween } from "@/lib/calendar-grid";
 import { DAY_TYPES, occupancyRate, totalRevenue, workedDays } from "@/lib/calculations/revenue";
+import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import type { CalendarEntry } from "@/lib/queries/calendar";
 import { setWorkDayRangeAction, toggleWorkDayAction } from "@/app/(app)/calendrier/actions";
 
@@ -87,6 +90,8 @@ export function CalendarBoard({
   clients,
   today,
   defaultFraction,
+  chargeRate,
+  forfaitRevenue,
   revenueTarget,
   daysTarget,
 }: {
@@ -96,6 +101,10 @@ export function CalendarBoard({
   clients: CalendarClient[];
   today: string;
   defaultFraction: number;
+  /** Taux de cotisations des réglages, pour le net estimé du mois. */
+  chargeRate: number;
+  /** CA des missions au forfait rattachées au mois : il n'a aucune case. */
+  forfaitRevenue: number;
   /** Objectifs du mois affiché — ceux du mois s'il en porte, sinon les réglages. */
   revenueTarget: number | null;
   daysTarget: number | null;
@@ -242,23 +251,26 @@ export function CalendarBoard({
       const current = dragRef.current;
       setDrag(null);
       if (!current) return;
-      const [from, to] = [current.from, current.to].sort();
-      if (from === to) return; // simple clic : géré par onClick
-      const selected = dates.filter((date) => date >= from && date <= to);
-      commitRange(selected, current.clear);
+      if (current.from === current.to) return; // simple clic : géré par onClick
+      commitRange(rectangleBetween(dates, leading, current.from, current.to), current.clear);
     }
     window.addEventListener("pointerup", onPointerUp);
     return () => window.removeEventListener("pointerup", onPointerUp);
-  }, [commitRange, dates]);
+  }, [commitRange, dates, leading]);
 
   const dragSelection = useMemo(() => {
     if (!drag) return new Set<string>();
-    const [from, to] = [drag.from, drag.to].sort();
-    return new Set(dates.filter((date) => date >= from && date <= to));
-  }, [dates, drag]);
+    return new Set(rectangleBetween(dates, leading, drag.from, drag.to));
+  }, [dates, drag, leading]);
 
   const monthEntries = optimisticEntries;
-  const revenue = totalRevenue(monthEntries);
+  // Un forfait n'occupe aucune case du calendrier, mais c'est bien du CA du
+  // mois : l'omettre ici ferait dire deux chiffres différents à cet écran et au
+  // tableau de bord.
+  const revenue = totalRevenue(monthEntries) + forfaitRevenue;
+  // Le net suit le CA optimiste : cocher un jour doit déplacer les deux
+  // chiffres du même clic, sans attendre le serveur.
+  const net = netFromRevenue(revenue, chargeRate);
   const worked = workedDays(monthEntries);
   const businessDays = businessDaysInMonth(year, month);
   const occupancy = occupancyRate(monthEntries, businessDays);
@@ -525,6 +537,20 @@ export function CalendarBoard({
           <Total
             label="CA du mois"
             value={formatMoney(revenue)}
+            sub={
+              <>
+                <span className="tabular text-foreground font-medium" data-testid="total-net">
+                  {formatMoney(net)}
+                </span>{" "}
+                net estimé
+                <span className="text-subtle-foreground"> · {formatPercent(chargeRate)}</span>
+                {forfaitRevenue > 0 ? (
+                  <span className="text-subtle-foreground block">
+                    dont {formatMoneyShort(forfaitRevenue)} au forfait, hors calendrier
+                  </span>
+                ) : null}
+              </>
+            }
             hint={
               revenueTarget
                 ? `Objectif ${formatMoneyShort(revenueTarget)} · ${Math.round((revenue / revenueTarget) * 100)} %`
@@ -567,35 +593,13 @@ export function CalendarBoard({
           <Kbd>Maj</Kbd>+<Kbd>Clic</Kbd> demi-journée
         </span>
         <span className="flex items-center gap-1">
-          <Kbd>Clic-glissé</Kbd> plage de jours
+          <Kbd>Clic-glissé</Kbd> rectangle de jours (sans les week-ends)
         </span>
         <span className="flex items-center gap-1">
           <Kbd>←</Kbd>
           <Kbd>→</Kbd> mois précédent / suivant
         </span>
       </p>
-    </div>
-  );
-}
-
-function Total({
-  label,
-  value,
-  hint,
-  testId,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  testId?: string;
-}) {
-  return (
-    <div className="px-4 py-3">
-      <p className="metric-label">{label}</p>
-      <p className="tabular mt-1 text-lg font-semibold" data-testid={testId}>
-        {value}
-      </p>
-      {hint ? <p className="text-subtle-foreground mt-0.5 text-xs">{hint}</p> : null}
     </div>
   );
 }

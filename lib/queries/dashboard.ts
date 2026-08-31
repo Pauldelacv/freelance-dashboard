@@ -11,7 +11,18 @@ import {
   workedDays,
   type WorkDayLike,
 } from "@/lib/calculations/revenue";
-import { groupAwaitingInvoices, type AwaitingInvoice } from "@/lib/calculations/invoices";
+import {
+  groupAwaitingInvoices,
+  type AwaitingInvoice,
+  type InvoicedForfait,
+} from "@/lib/calculations/invoices";
+import {
+  forfaitDate,
+  forfaitRevenueByMonth,
+  forfaitRevenueByStatus,
+  forfaitRevenueIn,
+  missionAmount,
+} from "@/lib/calculations/missions";
 import { dueProspects, openPipelineValue, weightedValue } from "@/lib/calculations/pipeline";
 import { getSettings } from "@/lib/settings";
 
@@ -26,7 +37,7 @@ export interface MonthlyPoint {
 export interface DashboardSummary {
   year: number;
   month: number;
-  /** CA facturable du mois en cours, en centimes. */
+  /** CA facturable du mois en cours, jours et forfaits confondus, en centimes. */
   monthRevenue: number;
   monthBillableDays: number;
   monthWorkedDays: number;
@@ -73,41 +84,75 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const from = firstDayOfMonth(windowStart.year, windowStart.month);
   const to = lastDayOfMonth(year, month);
 
-  const [windowDays, pendingDays, invoicedDays, yearDays, goal, settings, clientCount, prospects] =
-    await Promise.all([
-      prisma.workDay.findMany({ where: { date: { gte: from, lte: to } } }),
-      prisma.workDay.findMany({ where: { billing: "pending", type: "billable" } }),
-      prisma.workDay.findMany({
-        where: { billing: "invoiced", type: "billable" },
-        include: { client: { select: { name: true, color: true, paymentTerms: true } } },
-      }),
-      prisma.workDay.findMany({
-        where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` }, billing: "paid" },
-      }),
-      prisma.goal.findFirst({ where: { year, month } }),
-      getSettings(),
-      prisma.client.count({ where: { status: "active" } }),
-      prisma.prospect.findMany({ where: { stage: { in: ["contacted", "quoted"] } } }),
-    ]);
+  const [
+    windowDays,
+    pendingDays,
+    invoicedDays,
+    yearDays,
+    missions,
+    goal,
+    settings,
+    clientCount,
+    prospects,
+  ] = await Promise.all([
+    prisma.workDay.findMany({ where: { date: { gte: from, lte: to } } }),
+    prisma.workDay.findMany({ where: { billing: "pending", type: "billable" } }),
+    prisma.workDay.findMany({
+      where: { billing: "invoiced", type: "billable" },
+      include: { client: { select: { name: true, color: true, paymentTerms: true } } },
+    }),
+    prisma.workDay.findMany({
+      where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` }, billing: "paid" },
+    }),
+    // Les forfaits ne passent par aucun jour coché : sans cette lecture, tout
+    // un pan du CA manquerait à l'écran d'accueil.
+    prisma.mission.findMany({
+      where: { billingType: "forfait" },
+      include: { client: { select: { name: true, color: true, paymentTerms: true } } },
+    }),
+    prisma.goal.findFirst({ where: { year, month } }),
+    getSettings(),
+    prisma.client.count({ where: { status: "active" } }),
+    prisma.prospect.findMany({ where: { stage: { in: ["contacted", "quoted"] } } }),
+  ]);
 
   const days = windowDays as WorkDayLike[];
   const monthDays = days.filter((day) => day.date.startsWith(monthKey(year, month)));
   const byMonth = revenueByMonth(days);
+  const forfaitsByMonth = forfaitRevenueByMonth(missions);
+  const forfaits = forfaitRevenueByStatus(missions);
   const businessDays = businessDaysInMonth(year, month);
+
+  const invoicedForfaits: InvoicedForfait[] = missions
+    .filter((mission) => mission.billing === "invoiced" && missionAmount(mission) > 0)
+    .map((mission) => ({
+      id: mission.id,
+      title: mission.title,
+      amount: missionAmount(mission),
+      date: forfaitDate(mission),
+      billedAt: mission.billedAt,
+      clientId: mission.clientId,
+      client: mission.client,
+    }));
 
   return {
     year,
     month,
-    monthRevenue: totalRevenue(monthDays),
+    monthRevenue: totalRevenue(monthDays) + forfaitRevenueIn(missions, monthKey(year, month)),
     monthBillableDays: billableDays(monthDays),
     monthWorkedDays: workedDays(monthDays),
     monthBusinessDays: businessDays,
     occupancy: occupancyRate(monthDays, businessDays),
     averageRate: averageRealRate(days),
-    toInvoice: totalRevenue(pendingDays as WorkDayLike[]),
-    awaitingPayment: totalRevenue(invoicedDays as WorkDayLike[]),
-    collectedThisYear: revenueByBillingStatus(yearDays as WorkDayLike[]).paid,
-    awaitingInvoices: groupAwaitingInvoices(invoicedDays, today),
+    toInvoice: totalRevenue(pendingDays as WorkDayLike[]) + forfaits.pending,
+    awaitingPayment: totalRevenue(invoicedDays as WorkDayLike[]) + forfaits.invoiced,
+    collectedThisYear:
+      revenueByBillingStatus(yearDays as WorkDayLike[]).paid +
+      forfaitRevenueIn(
+        missions.filter((mission) => mission.billing === "paid"),
+        String(year),
+      ),
+    awaitingInvoices: groupAwaitingInvoices(invoicedDays, today, invoicedForfaits),
     revenueTarget: goal?.revenueTarget ?? settings.goals.monthlyRevenue,
     daysTarget: goal?.daysTarget ?? settings.goals.monthlyDays,
     last12Months: last12MonthKeys(year, month).map((point) => ({
@@ -115,7 +160,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       label: new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(
         new Date(Date.UTC(point.year, point.month - 1, 15)),
       ),
-      revenue: byMonth.get(monthKey(point.year, point.month)) ?? 0,
+      revenue:
+        (byMonth.get(monthKey(point.year, point.month)) ?? 0) +
+        (forfaitsByMonth.get(monthKey(point.year, point.month)) ?? 0),
     })),
     clientCount,
     pipelineValue: openPipelineValue(prospects),

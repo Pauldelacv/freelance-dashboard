@@ -6,22 +6,42 @@
  *  - jour *facturé*   → date de facture + délai de paiement du client → **certain**
  *  - jour *à facturer* → fin du mois + délai de paiement               → **probable**
  *  - jour *encaissé*  → déjà rentré, hors prévisionnel
+ *
+ * Une mission au forfait suit exactement la même règle : elle entre ici comme
+ * un montant unique daté (voir `lib/calculations/missions.ts`), et se range
+ * dans le certain ou le probable selon qu'elle est facturée ou non.
  */
 import { isoAddDays, lastDayOfMonth, startOfWeekIso } from "@/lib/dates";
 import { dayAmount } from "@/lib/money";
 
-export interface CashflowDay {
+/** Ce qu'il faut pour dater un encaissement : un rattachement et un délai. */
+export interface Schedulable {
+  /** Date de rattachement : le jour travaillé, ou la date du forfait. */
   date: string;
+  billing: string;
+  billedAt: string | null;
+  paymentTerms: number;
+}
+
+export interface CashflowDay extends Schedulable {
   fraction: number;
   rate: number;
   type: string;
-  billing: string;
-  billedAt: string | null;
   clientId: string | null;
   clientName: string | null;
   color: string | null;
-  paymentTerms: number;
 }
+
+/** Ce que le prévisionnel manipule réellement : une somme, une date, un client. */
+interface CashflowItem extends Schedulable {
+  amount: number;
+  clientId: string | null;
+  clientName: string | null;
+  color: string | null;
+}
+
+/** Une mission au forfait : elle entre déjà sous cette forme, sans conversion. */
+export type CashflowForfait = CashflowItem;
 
 export interface PipelineEntry {
   id: string;
@@ -42,35 +62,59 @@ export interface WeekBucket {
   byClient: { clientId: string; name: string; color: string; amount: number }[];
 }
 
-/** Date d'encaissement attendue pour un jour travaillé. */
-export function expectedPaymentDate(day: CashflowDay): string {
+/** Date d'encaissement attendue pour un jour travaillé ou un forfait. */
+export function expectedPaymentDate(item: Schedulable): string {
   const base =
-    day.billing === "invoiced" && day.billedAt
-      ? day.billedAt
-      : lastDayOfMonth(Number(day.date.slice(0, 4)), Number(day.date.slice(5, 7)));
-  return isoAddDays(base, day.paymentTerms);
+    item.billing === "invoiced" && item.billedAt
+      ? item.billedAt
+      : lastDayOfMonth(Number(item.date.slice(0, 4)), Number(item.date.slice(5, 7)));
+  return isoAddDays(base, item.paymentTerms);
 }
 
 function emptyBucket(weekStart: string): WeekBucket {
   return { weekStart, certain: 0, probable: 0, pipeline: 0, byClient: [] };
 }
 
-function addToClient(bucket: WeekBucket, day: CashflowDay, amount: number) {
-  const clientId = day.clientId ?? "";
+function addToClient(bucket: WeekBucket, item: CashflowItem) {
+  const clientId = item.clientId ?? "";
   const existing = bucket.byClient.find((entry) => entry.clientId === clientId);
-  if (existing) existing.amount += amount;
+  if (existing) existing.amount += item.amount;
   else
     bucket.byClient.push({
       clientId,
-      name: day.clientName ?? "Sans client",
-      color: day.color ?? "#94a3b8",
-      amount,
+      name: item.clientName ?? "Sans client",
+      color: item.color ?? "#94a3b8",
+      amount: item.amount,
     });
 }
 
 export interface ForecastOptions {
   weeks?: number;
   pipeline?: PipelineEntry[];
+  /** Missions au forfait à facturer ou facturées. */
+  forfaits?: CashflowForfait[];
+}
+
+/**
+ * Jours et forfaits ramenés à une même liste de sommes datées. Ce qui est déjà
+ * encaissé, ou n'est pas facturable, n'attend plus rien : il sort ici.
+ */
+function schedulableItems(days: CashflowDay[], forfaits: CashflowForfait[]): CashflowItem[] {
+  const items: CashflowItem[] = [];
+
+  for (const day of days) {
+    if (day.type !== "billable" || day.billing === "paid") continue;
+    const amount = dayAmount(day.rate, day.fraction);
+    if (amount === 0) continue;
+    items.push({ ...day, amount });
+  }
+
+  for (const forfait of forfaits) {
+    if (forfait.billing === "paid" || forfait.amount === 0) continue;
+    items.push(forfait);
+  }
+
+  return items;
 }
 
 /**
@@ -91,20 +135,18 @@ export function buildForecast(
   );
   const lastWeek = buckets[buckets.length - 1].weekStart;
 
-  for (const day of days) {
-    if (day.type !== "billable" || day.billing === "paid") continue;
-    const amount = dayAmount(day.rate, day.fraction);
-    if (amount === 0) continue;
-
-    const week = startOfWeekIso(expectedPaymentDate(day));
+  for (const item of schedulableItems(days, options.forfaits ?? [])) {
+    const week = startOfWeekIso(expectedPaymentDate(item));
     if (week > lastWeek) continue;
 
-    const bucket = buckets.find((item) => item.weekStart === (week < firstWeek ? firstWeek : week));
+    const bucket = buckets.find(
+      (candidate) => candidate.weekStart === (week < firstWeek ? firstWeek : week),
+    );
     if (!bucket) continue;
 
-    if (day.billing === "invoiced") bucket.certain += amount;
-    else bucket.probable += amount;
-    addToClient(bucket, day, amount);
+    if (item.billing === "invoiced") bucket.certain += item.amount;
+    else bucket.probable += item.amount;
+    addToClient(bucket, item);
   }
 
   for (const entry of options.pipeline ?? []) {

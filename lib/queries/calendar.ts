@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { firstDayOfMonth, lastDayOfMonth } from "@/lib/dates";
+import { forfaitRevenueIn } from "@/lib/calculations/missions";
 
 export interface CalendarEntry {
   id: string;
@@ -43,4 +44,17 @@ export function getMonthEntries(year: number, month: number): Promise<CalendarEn
 /** Jours de l'année pour la vue heatmap annuelle — 365 jours en une requête. */
 export function getYearEntries(year: number): Promise<CalendarEntry[]> {
   return getEntriesBetween(`${year}-01-01`, `${year}-12-31`);
+}
+
+/**
+ * CA des missions au forfait rattachées à une période — `prefix` est un mois
+ * « AAAA-MM » ou une année « AAAA ».
+ *
+ * Le pied de calendrier additionne les jours cochés : sans cette lecture, un
+ * forfait signé dans le mois serait bien compté sur le tableau de bord et
+ * absent ici, pour le même mois. Deux écrans, deux chiffres.
+ */
+export async function getForfaitRevenue(prefix: string): Promise<number> {
+  const missions = await prisma.mission.findMany({ where: { billingType: "forfait" } });
+  return forfaitRevenueIn(missions, prefix);
 }

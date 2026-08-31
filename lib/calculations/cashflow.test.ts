@@ -4,6 +4,7 @@ import {
   expectedPaymentDate,
   forecastTotals,
   type CashflowDay,
+  type CashflowForfait,
 } from "@/lib/calculations/cashflow";
 
 const day = (overrides: Partial<CashflowDay> = {}): CashflowDay => ({
@@ -11,6 +12,18 @@ const day = (overrides: Partial<CashflowDay> = {}): CashflowDay => ({
   fraction: 1,
   rate: 60000,
   type: "billable",
+  billing: "pending",
+  billedAt: null,
+  clientId: "c1",
+  clientName: "Agence Nord",
+  color: "#6366f1",
+  paymentTerms: 30,
+  ...overrides,
+});
+
+const forfait = (overrides: Partial<CashflowForfait> = {}): CashflowForfait => ({
+  date: "2026-08-20",
+  amount: 450000,
   billing: "pending",
   billedAt: null,
   clientId: "c1",
@@ -114,5 +127,33 @@ describe("prévisionnel", () => {
       { pipeline: [{ id: "p1", name: "X", weighted: 500000, expectedAt: "2026-09-01" }] },
     );
     expect(forecastTotals(buckets).nextMonth).toBe(60000);
+  });
+
+  it("place une mission au forfait comme un jour, à la date qui lui est propre", () => {
+    // À facturer : fin du mois de rattachement + délai, soit le 30/09.
+    // Facturée : date de facture + délai, soit le 04/09.
+    const buckets = buildForecast([], today, {
+      forfaits: [
+        forfait(),
+        forfait({ amount: 200000, billing: "invoiced", billedAt: "2026-08-05" }),
+      ],
+    });
+
+    const semaineDu31Aout = buckets.find((bucket) => bucket.weekStart === "2026-08-31");
+    const semaineDu28Sept = buckets.find((bucket) => bucket.weekStart === "2026-09-28");
+    expect(semaineDu31Aout?.certain).toBe(200000);
+    expect(semaineDu28Sept?.probable).toBe(450000);
+  });
+
+  it("laisse dehors un forfait déjà encaissé", () => {
+    const buckets = buildForecast([], today, { forfaits: [forfait({ billing: "paid" })] });
+    expect(forecastTotals(buckets).total).toBe(0);
+  });
+
+  it("empile forfait et jours sous le même client", () => {
+    const buckets = buildForecast([day()], today, { forfaits: [forfait()] });
+    const semaine = buckets.find((bucket) => bucket.weekStart === "2026-09-28");
+    expect(semaine?.byClient).toHaveLength(1);
+    expect(semaine?.byClient[0].amount).toBe(510000);
   });
 });

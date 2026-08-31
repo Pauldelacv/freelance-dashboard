@@ -28,6 +28,10 @@ async function resolveRate(clientId: string, missionId: string | null): Promise<
       include: { client: { select: { defaultRate: true } } },
     });
     if (!mission) return null;
+    // Au forfait, le CA est porté par la mission elle-même : un jour qui lui est
+    // rattaché ne vaut que du temps passé. Lui donner un TJM le facturerait une
+    // seconde fois.
+    if (mission.billingType === "forfait") return 0;
     return mission.rate ?? mission.client.defaultRate;
   }
   const client = await prisma.client.findUnique({

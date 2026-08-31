@@ -38,12 +38,19 @@ SEED_DEMO=1 npm run db:seed
 | `npm run db:studio`           | explorateur de base                                     |
 | `npm run hash-password`       | génère le hash du mot de passe et un secret de session  |
 
+`npm run check` et `npm run e2e` sont rejoués par GitHub Actions à chaque
+poussée, avec un `docker build` en prime : voir `.github/workflows/ci.yml`.
+
 ## Ce que fait l'application
 
 - **Calendrier** — un clic pose une journée pour le client actif, `Maj`+clic une
-  demi-journée, le clic-glissé une plage. Week-ends et jours fériés français grisés.
-  Le TJM est figé sur chaque jour à la saisie.
+  demi-journée, le clic-glissé un rectangle de cases (du lundi au vendredi sur
+  plusieurs semaines, sans les week-ends). Week-ends et jours fériés français
+  grisés. Le TJM est figé sur chaque jour à la saisie, et le pied de page donne
+  le CA du mois avec son net estimé.
 - **Clients** — TJM par défaut, couleur, délai de paiement, CA et jours par client.
+- **Missions** — en régie (TJM × jours cochés) ou au forfait : un montant unique
+  convenu d'avance, avec son propre suivi de facturation.
 - **Facturation** — aucune facture n'est émise ici : Indy reste la source de vérité.
   Chaque mois se clôture en un clic (à facturer → facturé → encaissé) avec un
   récapitulatif copiable.
@@ -55,6 +62,4 @@ SEED_DEMO=1 npm run db:seed
 
 Interface en français, montants en euros, mode sombre, installable en PWA.
 
-
 <img width="1440" height="788" alt="Capture d’écran 2026-08-25 à 21 04 17" src="https://github.com/user-attachments/assets/ff4ed144-4ee3-4a96-8b40-a99f0c80869e" />
-

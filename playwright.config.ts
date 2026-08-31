@@ -21,6 +21,9 @@ export default defineConfig({
       ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
       : {},
   },
+  // En CI, un rapport HTML : c'est lui qui part en artefact quand un parcours
+  // tombe, traces comprises. En local, la liste suffit.
+  reporter: process.env.CI ? [["html", { open: "never" }], ["list"]] : [["list"]],
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // Voir scripts/e2e-server.mjs : build standalone lancé dans un dossier isolé,

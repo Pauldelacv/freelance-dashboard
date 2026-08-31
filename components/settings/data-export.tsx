@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const TABLES = [
   { slug: "jours", label: "Jours travaillés" },
   { slug: "clients", label: "Clients" },
+  { slug: "missions", label: "Missions" },
   { slug: "prospects", label: "Prospects" },
   { slug: "veille", label: "Veille" },
 ] as const;

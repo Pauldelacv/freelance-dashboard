@@ -13,7 +13,7 @@ import { getYearGoals } from "@/lib/queries/goals";
 import { getSettings } from "@/lib/settings";
 import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import { cn } from "@/lib/utils";
-import { formatMoney, formatMoneyShort } from "@/lib/money";
+import { formatMoney, formatMoneyShort, formatPercent } from "@/lib/money";
 import { formatMonthLabel, todayIso } from "@/lib/dates";
 
 export default async function DashboardPage() {
@@ -52,7 +52,7 @@ export default async function DashboardPage() {
   // Le net vient du taux de cotisations des réglages, jamais d'une constante :
   // changer de régime se fait dans l'interface, pas dans le code.
   const monthNet = netFromRevenue(summary.monthRevenue, settings.tax.chargeRate);
-  const chargeLabel = percentFormatter.format(settings.tax.chargeRate);
+  const chargeLabel = formatPercent(settings.tax.chargeRate);
 
   return (
     <>
@@ -278,12 +278,6 @@ export default async function DashboardPage() {
     </>
   );
 }
-
-/** « 26,1 % » — le taux de cotisations tel qu'il est saisi dans les réglages. */
-const percentFormatter = new Intl.NumberFormat("fr-FR", {
-  style: "percent",
-  maximumFractionDigits: 2,
-});
 
 /**
  * Écart avec le mois précédent. `null` quand le mois précédent est à zéro :

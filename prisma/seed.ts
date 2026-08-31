@@ -64,6 +64,20 @@ async function seedDemo() {
     });
   }
 
+  // Une mission au forfait : un montant unique, sans jour à cocher — le cas que
+  // la régie ne sait pas représenter.
+  await prisma.mission.create({
+    data: {
+      clientId: studio.id,
+      title: "Refonte de l'identité",
+      billingType: "forfait",
+      forfaitAmount: 450000,
+      startDate: `${year}-${pad(month)}-01`,
+      endDate: `${year}-${pad(month)}-28`,
+      status: "active",
+    },
+  });
+
   await prisma.prospect.createMany({
     data: [
       {

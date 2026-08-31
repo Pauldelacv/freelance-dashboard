@@ -15,6 +15,34 @@ export const moneyField = z
     return cents;
   });
 
+/** Champ monétaire facultatif : "" devient `null`, le reste passe en centimes. */
+export const optionalMoneyField = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    if (value === "") return null;
+    const cents = parseMoney(value);
+    if (cents === null || cents < 0) {
+      ctx.addIssue({ code: "custom", message: "Montant invalide." });
+      return z.NEVER;
+    }
+    return cents;
+  });
+
+/** Nombre de jours facultatif, saisi avec virgule ou point. */
+export const optionalDaysField = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    if (value === "") return null;
+    const days = Number(value.replace(",", "."));
+    if (Number.isNaN(days) || days < 0 || days > 1000) {
+      ctx.addIssue({ code: "custom", message: "Nombre de jours invalide." });
+      return z.NEVER;
+    }
+    return days;
+  });
+
 /** Champ texte optionnel : "" devient null. */
 export const optionalText = z
   .string()

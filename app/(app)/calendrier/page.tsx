@@ -3,11 +3,11 @@ import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { CalendarViewSwitch } from "@/components/calendar/view-switch";
 import { GoalDialog } from "@/components/goals/goal-dialog";
 import { YearHeatmap } from "@/components/calendar/year-heatmap";
-import { getMonthEntries, getYearEntries } from "@/lib/queries/calendar";
+import { getForfaitRevenue, getMonthEntries, getYearEntries } from "@/lib/queries/calendar";
 import { listActiveClients } from "@/lib/queries/clients";
 import { getYearGoals } from "@/lib/queries/goals";
 import { getSettings } from "@/lib/settings";
-import { formatMonthLabel, todayIso } from "@/lib/dates";
+import { formatMonthLabel, monthKey, todayIso } from "@/lib/dates";
 
 export const metadata = { title: "Calendrier" };
 
@@ -44,7 +44,11 @@ export default async function CalendrierPage({
     const displayedYear = parseYear(a, year);
     // Une seule lecture pour les 365 jours : la vue annuelle n'interroge jamais
     // la base mois par mois.
-    const entries = await getYearEntries(displayedYear);
+    const [entries, yearSettings, yearForfaits] = await Promise.all([
+      getYearEntries(displayedYear),
+      getSettings(),
+      getForfaitRevenue(String(displayedYear)),
+    ]);
 
     return (
       <>
@@ -59,16 +63,23 @@ export default async function CalendrierPage({
             />
           }
         />
-        <YearHeatmap year={displayedYear} entries={entries} today={today} />
+        <YearHeatmap
+          year={displayedYear}
+          entries={entries}
+          today={today}
+          chargeRate={yearSettings.tax.chargeRate}
+          forfaitRevenue={yearForfaits}
+        />
       </>
     );
   }
 
-  const [entries, clients, settings, goals] = await Promise.all([
+  const [entries, clients, settings, goals, forfaitRevenue] = await Promise.all([
     getMonthEntries(year, month),
     listActiveClients(),
     getSettings(),
     getYearGoals(year),
+    getForfaitRevenue(monthKey(year, month)),
   ]);
 
   // Objectif du mois affiché, avec repli sur la valeur par défaut des réglages.
@@ -103,6 +114,8 @@ export default async function CalendrierPage({
         clients={clients}
         today={today}
         defaultFraction={settings.workday.defaultFraction}
+        chargeRate={settings.tax.chargeRate}
+        forfaitRevenue={forfaitRevenue}
         revenueTarget={monthGoal?.revenueTarget ?? fallback.revenueTarget}
         daysTarget={monthGoal?.daysTarget ?? fallback.daysTarget}
       />
