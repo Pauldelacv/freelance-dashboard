@@ -27,7 +27,9 @@ async function resolveRate(clientId: string, missionId: string | null): Promise<
       where: { id: missionId },
       include: { client: { select: { defaultRate: true } } },
     });
-    if (!mission) return null;
+    // Une mission d'un autre client ferait un jour incohérent : la fiche
+    // client compterait des jours que sa mission ne connaît pas.
+    if (!mission || mission.clientId !== clientId) return null;
     // Au forfait, le CA est porté par la mission elle-même : un jour qui lui est
     // rattaché ne vaut que du temps passé. Lui donner un TJM le facturerait une
     // seconde fois.
@@ -44,6 +46,9 @@ async function resolveRate(clientId: string, missionId: string | null): Promise<
 function revalidateCalendar() {
   revalidatePath("/calendrier");
   revalidatePath("/clients");
+  // Les fiches client, toutes : un jour coché change le compte de jours de la
+  // mission qui le porte, affiché là et nulle part ailleurs.
+  revalidatePath("/clients/[id]", "page");
   revalidatePath("/");
 }
 
@@ -63,7 +68,7 @@ export async function toggleWorkDayAction(input: ToggleInput): Promise<{ error?:
 
   if (!existing) {
     const rate = await resolveRate(clientId, missionId);
-    if (rate === null) return { error: "Client introuvable." };
+    if (rate === null) return { error: "Client ou mission introuvable." };
     await prisma.workDay.create({ data: { date, clientId, missionId, fraction, type, rate } });
   } else if (existing.fraction === fraction && existing.type === type) {
     await prisma.workDay.delete({ where: { id: existing.id } });
@@ -100,7 +105,7 @@ export async function setWorkDayRangeAction(input: RangeInput): Promise<{ error?
   }
 
   const rate = await resolveRate(clientId, missionId);
-  if (rate === null) return { error: "Client introuvable." };
+  if (rate === null) return { error: "Client ou mission introuvable." };
 
   const existing = await prisma.workDay.findMany({
     where: { date: { in: dates }, clientId, missionId },

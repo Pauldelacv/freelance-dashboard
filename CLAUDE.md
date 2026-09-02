@@ -165,7 +165,7 @@ model Setting {
 ### 4.1 Calendrier des jours travaillés — _cœur du produit_
 
 - Grille mensuelle, navigation mois précédent/suivant, raccourcis clavier `←`/`→`.
-- **Clic sur un jour = coché/décoché** avec le client actif (sélecteur en haut). **Shift+clic** = demi-journée. **Clic-glissé** = cocher un **rectangle** de cases (colonnes × semaines), et non une plage de dates : c'est ce qui permet de poser les jours ouvrés de plusieurs semaines sans les week-ends. Géométrie isolée dans `lib/calendar-grid.ts`, testée.
+- **Clic sur un jour = coché/décoché** avec le client actif (sélecteur en haut), et, s'il en a, la **mission active** (second sélecteur). Un jour posé sur une mission au **forfait** ne porte aucun TJM : il dit le temps passé, le CA restant le montant convenu, compté une seule fois. C'est ce qui permet de poser les dates de travail d'un contrat au forfait. **Shift+clic** = demi-journée. **Clic-glissé** = cocher un **rectangle** de cases (colonnes × semaines), et non une plage de dates : c'est ce qui permet de poser les jours ouvrés de plusieurs semaines sans les week-ends. Géométrie isolée dans `lib/calendar-grid.ts`, testée.
 - Pastille de couleur du client, montant du jour affiché au survol.
 - Week-ends et **jours fériés français** grisés (calcul local, sans API externe) mais cochables.
 - Types de journée : facturable, interne (admin/proso), formation, congé.
@@ -177,8 +177,8 @@ model Setting {
 - CRUD client : nom, société, contact, **TJM par défaut**, couleur, délai de paiement, statut, notes.
 - Missions rattachées, **en régie ou au forfait** :
   - _régie_ — TJM spécifique qui écrase celui du client ; le CA vient des jours cochés ;
-  - _forfait_ — un **montant unique** convenu d'avance, indépendant des jours passés, avec son propre statut de facturation (à facturer → facturé → encaissé) et son récapitulatif copiable vers Indy. Un seul paiement par mission ; les jalons (acompte / solde) restent hors périmètre.
-- Un forfait n'ayant pas de jour de travail, sa **date de rattachement** décide du mois où il compte : date de facture, sinon fin de mission, sinon début, sinon création (`lib/calculations/missions.ts`, testé).
+  - _forfait_ — un **montant unique** convenu d'avance, indépendant des jours passés, avec son propre statut de facturation (à facturer → facturé → encaissé) et son récapitulatif copiable vers Indy. Un seul paiement par mission ; les jalons (acompte / solde) restent hors périmètre. Ses jours de travail se cochent au calendrier comme les autres, à TJM nul : ils ne créent pas de CA, mais donnent le **TJM réellement obtenu** (montant ÷ jours) affiché sur la fiche client, à côté du **brut et du net** du forfait.
+- Le CA d'un forfait ne venant pas de ses jours, sa **date de rattachement** décide du mois où il compte : date de facture, sinon fin de mission, sinon début, sinon création (`lib/calculations/missions.ts`, testé).
 - Fiche client : CA total, CA de l'année, jours travaillés, TJM moyen réel, montant à facturer et encaissements attendus.
 - Le TJM est **figé sur chaque `WorkDay`** à la saisie : changer le TJM d'un client ne réécrit pas l'historique.
 
@@ -211,6 +211,10 @@ Ce que le dashboard fait à la place, en restant minimal :
 
 Bandeau de tuiles : CA du mois vs objectif · jours travaillés vs objectif · TJM moyen · taux d'occupation · **à facturer** · **encaissements attendus ce mois-ci**.
 En dessous : calendrier du mois en cours + graphique CA 12 mois + prospects à relancer.
+
+**Objectifs.** Chaque mois porte le sien ; un objectif **annuel** peut être réparti sur les mois cochés. La répartition fait alors loi : les mois décochés perdent leur objectif et retombent sur la valeur par défaut des réglages — sans quoi un objectif mensuel périmé continuerait de primer sur l'année qu'on vient de poser. Les cases de mois s'ouvrent sur la répartition **déjà enregistrée**, jamais sur une proposition qui effacerait la précédente (`lib/calculations/goals.ts`, testé). L'objectif annuel se lit dans le pied de la vue annuelle du calendrier.
+
+**Échéances URSSAF.** La déclaration trimestrielle apparaît en tête de « ce qui doit encore rentrer », dès son ouverture (le 1ᵉʳ du mois qui suit le trimestre) et jusqu'à ce qu'on la marque faite — le dashboard n'ayant aucun moyen de le savoir seul. Elle rappelle la date limite, le compte à rebours, et le **CA encaissé du trimestre** avec ses cotisations estimées, copiable. Calendrier et calcul dans `lib/calculations/urssaf.ts`, testés ; les trimestres déclarés sont mémorisés dans les réglages (clé `urssaf.done`), pas dans une table.
 
 ### 4.7 Confort
 

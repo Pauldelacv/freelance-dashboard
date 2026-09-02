@@ -30,6 +30,8 @@ export interface MissionLike {
   forfaitAmount: number | null;
   billing: string;
   billedAt: string | null;
+  /** Date d'encaissement — c'est elle qui date la déclaration URSSAF. */
+  paidAt?: string | null;
   startDate: string | null;
   endDate: string | null;
   createdAt: Date;

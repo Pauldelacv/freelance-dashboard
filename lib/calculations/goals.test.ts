@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   distributeAnnualGoal,
+  monthsToClear,
+  monthsWithGoal,
   splitDays,
   splitEvenly,
   workedMonths,
@@ -61,5 +63,36 @@ describe("mois travaillés", () => {
 
   it("ne retient rien sans jour saisi", () => {
     expect(workedMonths([])).toEqual([]);
+  });
+});
+
+describe("mois déjà porteurs d'un objectif", () => {
+  it("lit la répartition en place, dans l'ordre", () => {
+    const byMonth = {
+      12: { revenueTarget: 100, daysTarget: null },
+      1: { revenueTarget: 100, daysTarget: null },
+      9: { revenueTarget: 100, daysTarget: null },
+    };
+    expect(monthsWithGoal(byMonth)).toEqual([1, 9, 12]);
+  });
+
+  it("ne retient rien quand aucun mois n'a d'objectif", () => {
+    expect(monthsWithGoal({})).toEqual([]);
+  });
+});
+
+describe("mois à effacer après répartition", () => {
+  it("efface ce qui sort de la sélection", () => {
+    // Régression #30 : l'objectif d'un mois décoché survivait à la nouvelle
+    // répartition et continuait de primer sur elle.
+    expect(monthsToClear([1, 9, 12], [1, 2, 3])).toEqual([9, 12]);
+  });
+
+  it("n'efface rien quand la sélection couvre tout l'existant", () => {
+    expect(monthsToClear([1, 2], [1, 2, 3])).toEqual([]);
+  });
+
+  it("n'efface rien sans objectif préexistant", () => {
+    expect(monthsToClear([], [4, 5])).toEqual([]);
   });
 });

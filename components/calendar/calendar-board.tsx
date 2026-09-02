@@ -44,38 +44,61 @@ const TYPE_LABELS: Record<string, string> = {
 
 const ACTIVE_CLIENT_KEY = "fd:active-client";
 
+/** Mission sélectionnable au calendrier — régie comme forfait. */
+export interface CalendarMission {
+  id: string;
+  title: string;
+  billingType: string;
+  /** TJM figé sur les jours posés : celui de la mission, ou 0 au forfait. */
+  rate: number;
+  forfaitAmount: number | null;
+}
+
 export interface CalendarClient {
   id: string;
   name: string;
   color: string;
   defaultRate: number;
+  missions: CalendarMission[];
 }
 
 interface OptimisticPatch {
   kind: "toggle" | "range";
   dates: string[];
   clientId: string;
+  missionId: string | null;
   fraction: number;
   type: string;
   client: CalendarClient;
+  mission: CalendarMission | null;
+  /** TJM figé sur le jour posé, comme le fera le serveur. */
+  rate: number;
   clear: boolean;
+}
+
+/** Deux jours ne se recouvrent que s'ils visent le même client *et* la même mission. */
+function sameSlot(entry: CalendarEntry, clientId: string, missionId: string | null): boolean {
+  return entry.clientId === clientId && (entry.missionId ?? null) === missionId;
 }
 
 function applyPatch(entries: CalendarEntry[], patch: OptimisticPatch): CalendarEntry[] {
   const targets = new Set(patch.dates);
   const kept = entries.filter(
-    (entry) => !(targets.has(entry.date) && entry.clientId === patch.clientId),
+    (entry) => !(targets.has(entry.date) && sameSlot(entry, patch.clientId, patch.missionId)),
   );
   if (patch.clear) return kept;
 
   const added: CalendarEntry[] = patch.dates.map((date) => ({
-    id: `optimistic-${date}-${patch.clientId}`,
+    id: `optimistic-${date}-${patch.clientId}-${patch.missionId ?? ""}`,
     date,
     clientId: patch.clientId,
     clientName: patch.client.name,
     color: patch.client.color,
+    missionId: patch.missionId,
+    missionTitle: patch.mission?.title ?? null,
+    missionBillingType: patch.mission?.billingType ?? null,
     fraction: patch.fraction,
-    rate: patch.client.defaultRate,
+    rate: patch.rate,
     type: patch.type,
     billing: "pending",
     note: null,
@@ -114,6 +137,9 @@ export function CalendarBoard({
   const [optimisticEntries, addOptimistic] = useOptimistic(entries, applyPatch);
 
   const [activeClientId, setActiveClientId] = useState<string | null>(clients[0]?.id ?? null);
+  // Mission active, dans le client actif. `null` = pas de mission : le jour
+  // prend le TJM par défaut du client, comme avant.
+  const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
   const [fraction, setFraction] = useState<number>(defaultFraction);
   const [dayType, setDayType] = useState<string>("billable");
   const [drag, setDrag] = useState<{ from: string; to: string; clear: boolean } | null>(null);
@@ -131,6 +157,17 @@ export function CalendarBoard({
   }, [activeClientId]);
 
   const activeClient = clients.find((client) => client.id === activeClientId) ?? null;
+  const activeMission =
+    activeClient?.missions.find((mission) => mission.id === activeMissionId) ?? null;
+
+  // Changer de client remet la mission à zéro : celle d'avant appartenait à
+  // quelqu'un d'autre, et l'envoyer telle quelle rattacherait le jour au
+  // mauvais contrat.
+  useEffect(() => {
+    setActiveMissionId((current) =>
+      current && activeClient?.missions.some((mission) => mission.id === current) ? current : null,
+    );
+  }, [activeClient]);
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();
@@ -180,10 +217,16 @@ export function CalendarBoard({
   const entryFor = useCallback(
     (date: string) =>
       activeClientId
-        ? (entriesByDate.get(date) ?? []).find((entry) => entry.clientId === activeClientId)
+        ? (entriesByDate.get(date) ?? []).find((entry) =>
+            sameSlot(entry, activeClientId, activeMissionId),
+          )
         : undefined,
-    [activeClientId, entriesByDate],
+    [activeClientId, activeMissionId, entriesByDate],
   );
+
+  // TJM figé sur les jours à venir, dans les mêmes termes que le serveur :
+  // celui de la mission, sinon celui du client, et zéro au forfait.
+  const activeRate = activeMission ? activeMission.rate : (activeClient?.defaultRate ?? 0);
 
   const commitToggle = useCallback(
     (date: string, withFraction: number) => {
@@ -197,21 +240,24 @@ export function CalendarBoard({
           kind: "toggle",
           dates: [date],
           clientId: activeClient.id,
+          missionId: activeMissionId,
           fraction: withFraction,
           type: dayType,
           client: activeClient,
+          mission: activeMission,
+          rate: activeRate,
           clear,
         });
         await toggleWorkDayAction({
           date,
           clientId: activeClient.id,
-          missionId: null,
+          missionId: activeMissionId,
           fraction: withFraction === 0.5 ? 0.5 : 1,
           type: dayType as (typeof DAY_TYPES)[number],
         });
       });
     },
-    [activeClient, addOptimistic, dayType, entryFor],
+    [activeClient, activeMission, activeMissionId, activeRate, addOptimistic, dayType, entryFor],
   );
 
   const commitRange = useCallback(
@@ -222,22 +268,25 @@ export function CalendarBoard({
           kind: "range",
           dates: rangeDates,
           clientId: activeClient.id,
+          missionId: activeMissionId,
           fraction,
           type: dayType,
           client: activeClient,
+          mission: activeMission,
+          rate: activeRate,
           clear,
         });
         await setWorkDayRangeAction({
           dates: rangeDates,
           clientId: activeClient.id,
-          missionId: null,
+          missionId: activeMissionId,
           fraction: fraction === 0.5 ? 0.5 : 1,
           type: dayType as (typeof DAY_TYPES)[number],
           mode: clear ? "clear" : "set",
         });
       });
     },
-    [activeClient, addOptimistic, dayType, fraction],
+    [activeClient, activeMission, activeMissionId, activeRate, addOptimistic, dayType, fraction],
   );
 
   // Sélection par glissement : on retient l'ancre au pointerdown, on suit le
@@ -361,6 +410,29 @@ export function CalendarBoard({
             </select>
           </span>
 
+          {/* Sélecteur de mission : c'est lui qui permet de poser les jours
+              d'un contrat au forfait, qui n'en aurait aucun autrement
+              (issue #29). Absent quand le client n'a pas de mission en cours —
+              une liste à un seul choix n'aide personne. */}
+          {activeClient && activeClient.missions.length > 0 ? (
+            <select
+              aria-label="Mission active"
+              value={activeMissionId ?? ""}
+              onChange={(event) => setActiveMissionId(event.target.value || null)}
+              className={controlClass}
+            >
+              <option value="">Sans mission · {formatMoneyShort(activeClient.defaultRate)}</option>
+              {activeClient.missions.map((mission) => (
+                <option key={mission.id} value={mission.id}>
+                  {mission.title}
+                  {mission.billingType === "forfait"
+                    ? ` · forfait ${formatMoneyShort(mission.forfaitAmount ?? 0)}`
+                    : ` · ${formatMoneyShort(mission.rate)}`}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
           <div className="border-input flex h-8 overflow-hidden rounded-(--radius-control) border">
             {[1, 0.5].map((value) => (
               <button
@@ -393,6 +465,16 @@ export function CalendarBoard({
             ))}
           </select>
         </div>
+
+        {/* Un jour posé sur un forfait ne porte pas de TJM : le CA est le
+            montant convenu. Le dire ici évite de chercher pourquoi le total du
+            mois ne bouge pas d'un clic à l'autre. */}
+        {activeMission?.billingType === "forfait" ? (
+          <p className="text-subtle-foreground w-full px-1 pb-0.5 text-xs">
+            Les jours cochés sur « {activeMission.title} » marquent le temps passé : le CA reste le
+            forfait de {formatMoney(activeMission.forfaitAmount ?? 0)}, compté une seule fois.
+          </p>
+        ) : null}
       </Card>
 
       {/* La grille est un seul objet : le fond porte les filets (`gap-px` sur un
@@ -441,10 +523,14 @@ export function CalendarBoard({
                     holiday,
                     ...dayEntries.map(
                       (entry) =>
-                        `${entry.clientName ?? "Sans client"} · ${entry.fraction === 0.5 ? "½ j" : "1 j"}${
-                          entry.type === "billable"
-                            ? ` · ${formatMoney(Math.round(entry.rate * entry.fraction))}`
-                            : ` · ${TYPE_LABELS[entry.type]}`
+                        `${entry.clientName ?? "Sans client"}${
+                          entry.missionTitle ? ` — ${entry.missionTitle}` : ""
+                        } · ${entry.fraction === 0.5 ? "½ j" : "1 j"}${
+                          entry.type !== "billable"
+                            ? ` · ${TYPE_LABELS[entry.type]}`
+                            : entry.missionBillingType === "forfait"
+                              ? " · au forfait"
+                              : ` · ${formatMoney(Math.round(entry.rate * entry.fraction))}`
                         }`,
                     ),
                   ]
@@ -503,8 +589,13 @@ export function CalendarBoard({
                         <span className="truncate py-px pr-1 text-[10px] font-medium">
                           {entry.fraction === 0.5 ? "½ " : ""}
                           {/* Sur téléphone la case est trop étroite pour un nom :
-                              la couleur et le montant suffisent. */}
-                          <span className="hidden sm:inline">{entry.clientName ?? "—"}</span>
+                              la couleur et le montant suffisent. Sur un jour
+                              rattaché à une mission, c'est son intitulé qui est
+                              l'information neuve — le client se lit à la
+                              couleur. */}
+                          <span className="hidden sm:inline">
+                            {entry.missionTitle ?? entry.clientName ?? "—"}
+                          </span>
                         </span>
                       </span>
                     );
@@ -546,7 +637,7 @@ export function CalendarBoard({
                 <span className="text-subtle-foreground"> · {formatPercent(chargeRate)}</span>
                 {forfaitRevenue > 0 ? (
                   <span className="text-subtle-foreground block">
-                    dont {formatMoneyShort(forfaitRevenue)} au forfait, hors calendrier
+                    dont {formatMoneyShort(forfaitRevenue)} au forfait, indépendant des jours
                   </span>
                 ) : null}
               </>

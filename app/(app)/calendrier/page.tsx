@@ -44,11 +44,13 @@ export default async function CalendrierPage({
     const displayedYear = parseYear(a, year);
     // Une seule lecture pour les 365 jours : la vue annuelle n'interroge jamais
     // la base mois par mois.
-    const [entries, yearSettings, yearForfaits] = await Promise.all([
+    const [entries, yearSettings, yearGoals, yearForfaits] = await Promise.all([
       getYearEntries(displayedYear),
       getSettings(),
+      getYearGoals(displayedYear),
       getForfaitRevenue(String(displayedYear)),
     ]);
+    const displayedMonth = displayedYear === year ? month : 1;
 
     return (
       <>
@@ -56,11 +58,20 @@ export default async function CalendrierPage({
           title="Calendrier"
           description="Vue annuelle : les creux et les périodes chargées d'un coup d'œil."
           action={
-            <CalendarViewSwitch
-              view="year"
-              year={displayedYear}
-              month={displayedYear === year ? month : 1}
-            />
+            <>
+              {/* L'objectif annuel se pose là où on regarde l'année. */}
+              <GoalDialog
+                year={displayedYear}
+                month={displayedMonth}
+                monthLabel={formatMonthLabel(displayedYear, displayedMonth)}
+                goals={yearGoals}
+                fallback={{
+                  revenueTarget: yearSettings.goals.monthlyRevenue,
+                  daysTarget: yearSettings.goals.monthlyDays,
+                }}
+              />
+              <CalendarViewSwitch view="year" year={displayedYear} month={displayedMonth} />
+            </>
           }
         />
         <YearHeatmap
@@ -69,6 +80,8 @@ export default async function CalendrierPage({
           today={today}
           chargeRate={yearSettings.tax.chargeRate}
           forfaitRevenue={yearForfaits}
+          revenueTarget={yearGoals.annual?.revenueTarget ?? null}
+          daysTarget={yearGoals.annual?.daysTarget ?? null}
         />
       </>
     );

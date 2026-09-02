@@ -24,6 +24,12 @@ import {
   missionAmount,
 } from "@/lib/calculations/missions";
 import { dueProspects, openPipelineValue, weightedValue } from "@/lib/calculations/pipeline";
+import {
+  collectedInQuarter,
+  daysLeft as declarationDaysLeft,
+  isOverdue,
+  openDeclaration,
+} from "@/lib/calculations/urssaf";
 import { getSettings } from "@/lib/settings";
 
 export type { AwaitingInvoice };
@@ -32,6 +38,30 @@ export interface MonthlyPoint {
   key: string;
   label: string;
   revenue: number;
+}
+
+/**
+ * Échéance de déclaration trimestrielle URSSAF telle que l'affiche le tableau
+ * de bord (issue #31).
+ *
+ * Elle est envoyée même une fois faite, avec `done` à `true` : c'est le
+ * composant client qui décide de ne rien afficher. La renvoyer à `null`
+ * démonterait l'encadré à la seconde du clic, et avec lui le « Annuler » qui
+ * vient d'apparaître.
+ */
+export interface DeclarationNotice {
+  key: string;
+  label: string;
+  /** Déclaration marquée faite : l'encadré ne s'affiche plus. */
+  done: boolean;
+  /** Date limite, et jours restants (négatifs une fois passée). */
+  dueAt: string;
+  daysLeft: number;
+  overdue: boolean;
+  /** CA encaissé sur le trimestre : le montant à reporter dans la déclaration. */
+  collected: number;
+  /** Cotisations estimées au taux des réglages. */
+  charges: number;
 }
 
 export interface DashboardSummary {
@@ -58,6 +88,8 @@ export interface DashboardSummary {
   collectedThisYear: number;
   /** Factures émises restant à pointer, de la plus ancienne à la plus récente. */
   awaitingInvoices: AwaitingInvoice[];
+  /** Déclaration trimestrielle URSSAF ouverte à la date du jour. */
+  declaration: DeclarationNotice;
   revenueTarget: number | null;
   daysTarget: number | null;
   last12Months: MonthlyPoint[];
@@ -90,11 +122,16 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const from = firstDayOfMonth(windowStart.year, windowStart.month);
   const to = lastDayOfMonth(year, month);
 
+  // La déclaration ouverte ne dépend que de la date : on la connaît avant
+  // d'interroger la base, ce qui permet de ne lire que ses encaissements.
+  const declaration = openDeclaration(today);
+
   const [
     windowDays,
     pendingDays,
     invoicedDays,
     yearDays,
+    quarterPaidDays,
     missions,
     goal,
     settings,
@@ -109,6 +146,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     }),
     prisma.workDay.findMany({
       where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` }, billing: "paid" },
+    }),
+    // Filtré sur la date d'**encaissement** et non sur celle du travail :
+    // c'est le CA encaissé du trimestre qui se déclare à l'URSSAF.
+    prisma.workDay.findMany({
+      where: {
+        billing: "paid",
+        type: "billable",
+        paidAt: { gte: declaration.from, lte: declaration.to },
+      },
     }),
     // Les forfaits ne passent par aucun jour coché : sans cette lecture, tout
     // un pan du CA manquerait à l'écran d'accueil.
@@ -129,6 +175,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const forfaits = forfaitRevenueByStatus(missions);
   const businessDays = businessDaysInMonth(year, month);
   const monthForfaitRevenue = forfaitRevenueIn(missions, monthKey(year, month));
+  const collected = collectedInQuarter(quarterPaidDays, missions, declaration);
 
   const invoicedForfaits: InvoicedForfait[] = missions
     .filter((mission) => mission.billing === "invoiced" && missionAmount(mission) > 0)
@@ -161,6 +208,16 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
         String(year),
       ),
     awaitingInvoices: groupAwaitingInvoices(invoicedDays, today, invoicedForfaits),
+    declaration: {
+      key: declaration.key,
+      label: declaration.label,
+      done: settings.urssaf.done.includes(declaration.key),
+      dueAt: declaration.dueAt,
+      daysLeft: declarationDaysLeft(declaration, today),
+      overdue: isOverdue(declaration, today),
+      collected,
+      charges: Math.round(collected * settings.tax.chargeRate),
+    },
     revenueTarget: goal?.revenueTarget ?? settings.goals.monthlyRevenue,
     daysTarget: goal?.daysTarget ?? settings.goals.monthlyDays,
     last12Months: last12MonthKeys(year, month).map((point) => ({
