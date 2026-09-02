@@ -56,3 +56,31 @@ export function workedMonths(dates: string[]): number[] {
   for (const date of dates) months.add(monthOf(date));
   return [...months].sort((a, b) => a - b);
 }
+
+/**
+ * Mois déjà porteurs d'un objectif : c'est la répartition en place.
+ *
+ * La boîte de dialogue s'ouvrait auparavant sur les *mois travaillés*, sans
+ * jamais relire ce qui avait été enregistré : on cochait décembre, on
+ * enregistrait, on rouvrait — décembre était redevenu vide. Rien n'avait été
+ * perdu en base, mais l'écran disait le contraire (issue #30).
+ */
+export function monthsWithGoal(byMonth: Record<number, unknown>): number[] {
+  return Object.keys(byMonth)
+    .map(Number)
+    .filter((month) => Number.isInteger(month) && month >= 1 && month <= 12)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * Mois à effacer quand on enregistre une répartition annuelle : ceux qui
+ * portaient un objectif et ne font plus partie de la sélection.
+ *
+ * Sans cela, un objectif mensuel resté d'une répartition précédente continuait
+ * de s'appliquer — l'objectif du mois « primait » sur l'année qu'on venait de
+ * poser, alors que la répartition est justement censée faire loi.
+ */
+export function monthsToClear(existing: number[], selected: number[]): number[] {
+  const kept = new Set(selected);
+  return [...new Set(existing)].filter((month) => !kept.has(month)).sort((a, b) => a - b);
+}

@@ -8,6 +8,11 @@ export interface CalendarEntry {
   clientId: string | null;
   clientName: string | null;
   color: string | null;
+  /** Mission rattachée, quand le jour a été posé sur l'une d'elles. */
+  missionId: string | null;
+  missionTitle: string | null;
+  /** "forfait" : le jour ne vaut que du temps passé, son TJM est nul. */
+  missionBillingType: string | null;
   fraction: number;
   rate: number;
   type: string;
@@ -19,7 +24,10 @@ export interface CalendarEntry {
 async function getEntriesBetween(from: string, to: string): Promise<CalendarEntry[]> {
   const days = await prisma.workDay.findMany({
     where: { date: { gte: from, lte: to } },
-    include: { client: { select: { name: true, color: true } } },
+    include: {
+      client: { select: { name: true, color: true } },
+      mission: { select: { title: true, billingType: true } },
+    },
     orderBy: { date: "asc" },
   });
 
@@ -29,6 +37,9 @@ async function getEntriesBetween(from: string, to: string): Promise<CalendarEntr
     clientId: day.clientId,
     clientName: day.client?.name ?? null,
     color: day.client?.color ?? null,
+    missionId: day.missionId,
+    missionTitle: day.mission?.title ?? null,
+    missionBillingType: day.mission?.billingType ?? null,
     fraction: day.fraction,
     rate: day.rate,
     type: day.type,

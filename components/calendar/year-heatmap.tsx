@@ -99,6 +99,8 @@ export function YearHeatmap({
   today,
   chargeRate,
   forfaitRevenue,
+  revenueTarget,
+  daysTarget,
 }: {
   year: number;
   entries: CalendarEntry[];
@@ -107,6 +109,10 @@ export function YearHeatmap({
   chargeRate: number;
   /** CA des missions au forfait de l'année : elles n'ont aucune case. */
   forfaitRevenue: number;
+  /** Objectif annuel, s'il a été saisi — sinon la case reste muette. */
+  revenueTarget: number | null;
+  /** Objectif annuel de jours, même règle. */
+  daysTarget: number | null;
 }) {
   const holidays = holidaysOfYear(year);
 
@@ -198,7 +204,11 @@ export function YearHeatmap({
 
       <Card>
         <div className="divide-border border-border grid grid-cols-2 gap-px divide-x-0 sm:grid-cols-4 sm:divide-x">
-          <Total label="Jours travaillés" value={worked.toLocaleString("fr-FR")} />
+          <Total
+            label="Jours travaillés"
+            value={worked.toLocaleString("fr-FR")}
+            hint={daysTarget ? `Objectif ${daysTarget.toLocaleString("fr-FR")} j` : undefined}
+          />
           <Total
             label="Jours facturables"
             value={billable.toLocaleString("fr-FR")}
@@ -220,6 +230,13 @@ export function YearHeatmap({
                   </span>
                 ) : null}
               </>
+            }
+            /* L'objectif annuel n'apparaissait nulle part : on pouvait le
+               saisir dix fois sans jamais rien voir bouger (issue #30). */
+            hint={
+              revenueTarget
+                ? `Objectif ${formatMoneyShort(revenueTarget)} · ${Math.round((revenue / revenueTarget) * 100)} %`
+                : undefined
             }
             testId="year-revenue"
           />

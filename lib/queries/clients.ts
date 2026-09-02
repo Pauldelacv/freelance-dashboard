@@ -119,6 +119,8 @@ export interface MissionRow {
   countedOn: string | null;
   /** Jours cochés rattachés à la mission : ce qui interdit la suppression. */
   workDayCount: number;
+  /** Ces mêmes jours en durée, demi-journées comprises. */
+  workedDays: number;
 }
 
 export interface ClientDetail extends ClientSummary {
@@ -137,6 +139,9 @@ export interface ClientDetail extends ClientSummary {
     billedAt: string | null;
     note: string | null;
     missionId: string | null;
+    /** Mission rattachée, pour distinguer un jour au forfait d'un jour à 0 €. */
+    missionTitle: string | null;
+    missionBillingType: string | null;
   }[];
   /** Périodes regroupées par mois, pour la clôture vers Indy. */
   months: {
@@ -166,6 +171,22 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
 
   const days = client.workDays as WorkDayLike[];
   const year = todayIso().slice(0, 4);
+
+  // Durée réellement passée par mission : `_count` compte des lignes, pas des
+  // journées, et une demi-journée compte pour une demi-journée.
+  const daysByMission = new Map<string, number>();
+  for (const day of client.workDays) {
+    if (!day.missionId || day.type === "off") continue;
+    daysByMission.set(day.missionId, (daysByMission.get(day.missionId) ?? 0) + day.fraction);
+  }
+
+  const missionTitles = new Map(
+    client.missions.map((mission) => [
+      mission.id,
+      { title: mission.title, billingType: mission.billingType },
+    ]),
+  );
+
   const breakdown = revenueByBillingStatus(days);
   const forfaits = forfaitRevenueByStatus(client.missions);
 
@@ -245,6 +266,7 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
       notes: mission.notes,
       countedOn: missionAmount(mission) > 0 ? forfaitDate(mission) : null,
       workDayCount: mission._count.workDays,
+      workedDays: daysByMission.get(mission.id) ?? 0,
     })),
     days: client.workDays.map((day) => ({
       id: day.id,
@@ -256,6 +278,8 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
       billedAt: day.billedAt,
       note: day.note,
       missionId: day.missionId,
+      missionTitle: missionTitles.get(day.missionId ?? "")?.title ?? null,
+      missionBillingType: missionTitles.get(day.missionId ?? "")?.billingType ?? null,
     })),
     months: [...monthMap.entries()]
       .map(([key, value]) => {
@@ -276,11 +300,43 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
   };
 }
 
-/** Clients sélectionnables dans le calendrier. */
+/**
+ * Clients sélectionnables dans le calendrier, avec leurs missions en cours.
+ *
+ * Les missions voyagent avec le client parce que le calendrier doit pouvoir
+ * rattacher un jour à l'une d'elles : sans ça, un contrat au forfait n'a
+ * aucune date de travail, alors que c'est bien ce qu'on cherche à poser
+ * (issue #29). Les missions terminées sont écartées — on ne coche pas des
+ * jours sur une prestation livrée.
+ */
 export async function listActiveClients() {
-  return prisma.client.findMany({
+  const clients = await prisma.client.findMany({
     where: { status: { not: "archived" } },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, color: true, defaultRate: true },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      defaultRate: true,
+      missions: {
+        where: { status: { not: "done" } },
+        orderBy: [{ status: "asc" }, { title: "asc" }],
+        select: { id: true, title: true, billingType: true, rate: true, forfaitAmount: true },
+      },
+    },
   });
+
+  return clients.map((client) => ({
+    ...client,
+    missions: client.missions.map((mission) => ({
+      id: mission.id,
+      title: mission.title,
+      billingType: mission.billingType,
+      // TJM figé sur les jours à venir : celui de la mission, sinon celui du
+      // client. Au forfait il vaut zéro — le CA est porté par le montant
+      // convenu, pas par les jours.
+      rate: mission.billingType === "forfait" ? 0 : (mission.rate ?? client.defaultRate),
+      forfaitAmount: mission.forfaitAmount,
+    })),
+  }));
 }

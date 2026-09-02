@@ -7,7 +7,8 @@ import { prisma } from "@/lib/db";
 import { requireSession, signOut } from "@/lib/auth";
 import { markPeriodPaid, markPeriodUnpaid } from "@/lib/billing";
 import { parseMoney } from "@/lib/money";
-import { distributeAnnualGoal } from "@/lib/calculations/goals";
+import { getSettings, saveSettings } from "@/lib/settings";
+import { distributeAnnualGoal, monthsToClear } from "@/lib/calculations/goals";
 import { toFieldErrors, type FormState } from "@/lib/validation";
 
 export async function signOutAction(): Promise<void> {
@@ -97,6 +98,17 @@ export async function saveGoalAction(_prev: FormState, formData: FormData): Prom
         }),
       );
     }
+
+    // Les mois décochés perdent leur objectif : la répartition qu'on vient de
+    // poser fait loi. Les y laisser, c'était laisser un objectif mensuel
+    // périmé primer sur l'année qu'on venait d'enregistrer (issue #30).
+    const previous = existing
+      .map((goal) => goal.month)
+      .filter((value): value is number => value !== null);
+    for (const stale of monthsToClear(previous, months)) {
+      const id = idOf(stale);
+      if (id) writes.push(prisma.goal.delete({ where: { id } }));
+    }
   }
 
   if (writes.length > 0) await prisma.$transaction(writes);
@@ -147,4 +159,35 @@ export async function markInvoiceUnpaidAction(input: z.input<typeof periodSchema
 
   const count = await markPeriodUnpaid(parsed.data.clientId, parsed.data.month);
   return { count };
+}
+
+/**
+ * Déclaration trimestrielle URSSAF marquée faite — ou remise en place
+ * (issue #31).
+ *
+ * Le dashboard ne peut pas savoir si la déclaration a été envoyée : c'est
+ * l'utilisateur qui le dit, et la clé du trimestre suffit à s'en souvenir. La
+ * liste ne grandit que de quatre entrées par an : on la garde dans les
+ * réglages plutôt que d'ouvrir une table pour ça.
+ */
+const declarationSchema = z.object({
+  key: z.string().regex(/^\d{4}-T[1-4]$/, "Trimestre invalide."),
+  done: z.boolean(),
+});
+
+export async function setDeclarationDoneAction(input: z.input<typeof declarationSchema>) {
+  await requireSession();
+  const parsed = declarationSchema.safeParse(input);
+  if (!parsed.success) return { error: "Trimestre invalide." };
+  const { key, done } = parsed.data;
+
+  const settings = await getSettings();
+  const current = settings.urssaf.done.filter((entry) => entry !== key);
+
+  await saveSettings({ urssaf: { done: done ? [...current, key] : current } });
+  // Pas de `revalidatePath` ici, à dessein : réinvalider le tableau de bord
+  // retirerait l'encadré du rendu serveur, donc démonterait le composant — et
+  // avec lui le « Annuler » qui vient d'apparaître. L'écran suivant le lira
+  // depuis les réglages, où il est bel et bien enregistré.
+  return {};
 }

@@ -159,6 +159,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               clientRate={client.defaultRate}
               missions={client.missions}
               indyUrl={settings.indyUrl}
+              chargeRate={settings.tax.chargeRate}
             />
           </CardContent>
         </Card>
@@ -182,38 +183,51 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       <th className="pb-2 font-medium">Date</th>
                       <th className="pb-2 font-medium">Durée</th>
                       <th className="pb-2 font-medium">Type</th>
+                      <th className="pb-2 font-medium">Mission</th>
                       <th className="pb-2 text-right font-medium">TJM</th>
                       <th className="pb-2 text-right font-medium">Montant</th>
                       <th className="pb-2 text-right font-medium">Statut</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {client.days.slice(0, 60).map((day) => (
-                      <tr key={day.id} className="border-border/60 border-b last:border-0">
-                        <td className="py-2">{day.date}</td>
-                        <td className="py-2">{day.fraction === 0.5 ? "½ journée" : "1 journée"}</td>
-                        <td className="text-muted-foreground py-2">{TYPE_LABELS[day.type]}</td>
-                        <td className="tabular py-2 text-right">{formatMoney(day.rate)}</td>
-                        <td className="tabular py-2 text-right">
-                          {day.type === "billable"
-                            ? formatMoney(Math.round(day.rate * day.fraction))
-                            : "—"}
-                        </td>
-                        <td className="py-2 text-right">
-                          <Badge
-                            variant={
-                              day.billing === "paid"
-                                ? "success"
-                                : day.billing === "invoiced"
-                                  ? "default"
-                                  : "warning"
-                            }
-                          >
-                            {BILLING_LABELS[day.billing]}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
+                    {client.days.slice(0, 60).map((day) => {
+                      // Un jour posé sur un forfait ne porte aucun TJM : son CA
+                      // est le montant convenu, compté une seule fois sur la
+                      // mission. Afficher « 0,00 € » laisserait croire à une
+                      // journée perdue.
+                      const forfait = day.missionBillingType === "forfait";
+                      return (
+                        <tr key={day.id} className="border-border/60 border-b last:border-0">
+                          <td className="py-2">{day.date}</td>
+                          <td className="py-2">
+                            {day.fraction === 0.5 ? "½ journée" : "1 journée"}
+                          </td>
+                          <td className="text-muted-foreground py-2">{TYPE_LABELS[day.type]}</td>
+                          <td className="text-muted-foreground py-2">{day.missionTitle ?? "—"}</td>
+                          <td className="tabular py-2 text-right">
+                            {forfait ? "au forfait" : formatMoney(day.rate)}
+                          </td>
+                          <td className="tabular py-2 text-right">
+                            {forfait || day.type !== "billable"
+                              ? "—"
+                              : formatMoney(Math.round(day.rate * day.fraction))}
+                          </td>
+                          <td className="py-2 text-right">
+                            <Badge
+                              variant={
+                                day.billing === "paid"
+                                  ? "success"
+                                  : day.billing === "invoiced"
+                                    ? "default"
+                                    : "warning"
+                              }
+                            >
+                              {BILLING_LABELS[day.billing]}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {client.days.length > 60 ? (

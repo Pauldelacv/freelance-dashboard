@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatMoney, parseMoney, toEuros } from "@/lib/money";
 import { formatMonthShort } from "@/lib/dates";
-import { splitDays, splitEvenly } from "@/lib/calculations/goals";
+import { monthsWithGoal, splitDays, splitEvenly } from "@/lib/calculations/goals";
 import type { GoalValues, YearGoals } from "@/lib/queries/goals";
 import type { FormState } from "@/lib/validation";
 import { saveGoalAction } from "@/app/(app)/actions";
@@ -197,10 +197,17 @@ function AnnualForm({
   const [days, setDays] = useState(daysValue(goals.annual?.daysTarget));
   const [distribute, setDistribute] = useState(true);
 
-  // Répartition proposée sur les mois travaillés ; à défaut, sur l'année entière
-  // — un objectif posé en janvier n'a encore aucun jour derrière lui.
+  // Les cases repartent de la répartition **déjà enregistrée** : c'est elle
+  // qu'on vient corriger. À défaut seulement, on propose les mois travaillés,
+  // puis l'année entière — un objectif posé en janvier n'a encore aucun jour
+  // derrière lui.
+  const existing = monthsWithGoal(goals.byMonth);
   const proposed =
-    goals.worked.length > 0 ? goals.worked : Array.from({ length: 12 }, (_, i) => i + 1);
+    existing.length > 0
+      ? existing
+      : goals.worked.length > 0
+        ? goals.worked
+        : Array.from({ length: 12 }, (_, i) => i + 1);
   const [selected, setSelected] = useState<number[]>(proposed);
 
   useEffect(() => {
@@ -311,14 +318,22 @@ function AnnualForm({
               : share
                 ? `Soit ${share.revenue !== null ? formatMoney(share.revenue) : "—"}${
                     share.days !== null ? ` et ${share.days.toLocaleString("fr-FR")} j` : ""
-                  } par mois sur ${selected.length} mois. Les objectifs mensuels existants sont écrasés.`
+                  } par mois sur ${selected.length} mois. Les mois cochés prennent cet objectif, les autres repassent à la valeur par défaut des réglages.`
                 : "Saisissez un objectif annuel à répartir."}
           </p>
           {state.fieldErrors?.months ? (
             <p className="text-danger text-xs">{state.fieldErrors.months}</p>
           ) : null}
         </>
-      ) : null}
+      ) : (
+        // Sans répartition, l'objectif annuel n'est qu'un repère : ce sont les
+        // objectifs mensuels qui alimentent la jauge du tableau de bord. Le
+        // dire ici évite de croire qu'« enregistrer » n'a rien fait.
+        <p className="text-subtle-foreground text-xs">
+          L&apos;objectif annuel est enregistré tel quel, sans toucher aux objectifs mensuels — ce
+          sont eux que suivent le tableau de bord et le pied de calendrier.
+        </p>
+      )}
 
       {state.error ? <p className="text-danger text-sm">{state.error}</p> : null}
 

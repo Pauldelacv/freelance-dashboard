@@ -39,6 +39,16 @@ export const settingsSchema = z.object({
       defaultFraction: z.union([z.literal(1), z.literal(0.5)]).default(1),
     })
     .default({ defaultFraction: 1 }),
+  urssaf: z
+    .object({
+      /**
+       * Déclarations trimestrielles marquées comme faites, par clé « 2026-T2 ».
+       * Une déclaration ne concerne qu'un trimestre : la liste ne grandit que
+       * de quatre entrées par an, inutile d'y consacrer une table.
+       */
+      done: z.array(z.string()).default([]),
+    })
+    .default({ done: [] }),
 });
 
 export type AppSettings = z.infer<typeof settingsSchema>;
@@ -66,6 +76,7 @@ export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSett
     modules: { ...current.modules, ...patch.modules },
     goals: { ...current.goals, ...patch.goals },
     workday: { ...current.workday, ...patch.workday },
+    urssaf: { ...current.urssaf, ...patch.urssaf },
   });
   const value = JSON.stringify(merged);
   await prisma.setting.upsert({

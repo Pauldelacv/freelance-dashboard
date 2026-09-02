@@ -6,6 +6,7 @@ import { Metric, MetricRow } from "@/components/dashboard/metric";
 import { RevenueBars } from "@/components/dashboard/revenue-bars";
 import { CashFlowBar } from "@/components/dashboard/cash-flow-bar";
 import { PaymentInbox } from "@/components/dashboard/payment-inbox";
+import { DeclarationNotice } from "@/components/dashboard/declaration-notice";
 import { Card, CardBar, CardContent, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDashboardSummary } from "@/lib/queries/dashboard";
@@ -89,7 +90,8 @@ export default async function DashboardPage() {
               </p>
               {summary.monthForfaitRevenue > 0 ? (
                 <p className="text-subtle-foreground mt-1 text-xs">
-                  dont {formatMoney(summary.monthForfaitRevenue)} au forfait, sans jour au calendrier
+                  dont {formatMoney(summary.monthForfaitRevenue)} au forfait, indépendant des jours
+                  cochés
                 </p>
               ) : null}
               {delta ? (
@@ -193,6 +195,12 @@ export default async function DashboardPage() {
               <ArrowRight className="size-3" />
             </Link>
           </CardBar>
+
+          {/* L'échéance URSSAF d'abord : c'est la seule ligne de cette carte
+              qui porte une date limite. Elle s'efface d'elle-même une fois la
+              déclaration marquée faite. */}
+          <DeclarationNotice notice={summary.declaration} />
+
           <CardContent className="pt-4">
             <CashFlowBar
               segments={[

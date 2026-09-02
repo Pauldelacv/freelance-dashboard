@@ -18,7 +18,8 @@ import {
   MissionFormDialog,
   type MissionFormValues,
 } from "@/components/clients/mission-form-dialog";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatMoneyShort, formatPercent } from "@/lib/money";
+import { netFromRevenue } from "@/lib/calculations/rate-simulator";
 import { formatDayMonth } from "@/lib/dates";
 import type { BillingStatus } from "@/lib/calculations/revenue";
 import {
@@ -31,6 +32,8 @@ export interface MissionRowValues extends MissionFormValues {
   billedAt: string | null;
   paidAt: string | null;
   workDayCount: number;
+  /** Jours cochés au calendrier, demi-journées comprises. */
+  workedDays: number;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -55,6 +58,16 @@ function recapText(clientName: string, mission: MissionRowValues): string {
 }
 
 /**
+ * TJM réellement obtenu sur un forfait : montant convenu ÷ jours passés.
+ * C'est le seul chiffre qui dit si le forfait était bien vendu — et il n'existe
+ * qu'une fois des jours cochés dessus.
+ */
+function effectiveRate(mission: MissionRowValues): number | null {
+  if (mission.workedDays <= 0) return null;
+  return Math.round((mission.forfaitAmount ?? 0) / mission.workedDays);
+}
+
+/**
  * Missions du client.
  *
  * Une mission en régie ne porte qu'un TJM : ce sont les jours cochés qui font
@@ -62,6 +75,10 @@ function recapText(clientName: string, mission: MissionRowValues): string {
  * mission au forfait, elle, est une facture à elle seule — d'où les mêmes trois
  * états qu'un mois de régie (à facturer → facturé → encaissé) et son propre
  * récapitulatif copiable vers Indy.
+ *
+ * Les deux peuvent porter des jours au calendrier. Au forfait ces jours ne
+ * valent aucun euro — le CA est le montant convenu — mais ils disent le temps
+ * réellement passé, et donc le TJM effectivement obtenu (issue #29).
  */
 export function MissionList({
   clientId,
@@ -69,12 +86,15 @@ export function MissionList({
   clientRate,
   missions,
   indyUrl,
+  chargeRate,
 }: {
   clientId: string;
   clientName: string;
   clientRate: number;
   missions: MissionRowValues[];
   indyUrl: string;
+  /** Taux de cotisations des réglages : le net d'un forfait s'en déduit. */
+  chargeRate: number;
 }) {
   const [pending, startTransition] = useTransition();
   const [copied, setCopied] = useState<string | null>(null);
@@ -84,7 +104,8 @@ export function MissionList({
       <div className="flex flex-col items-start gap-3">
         <p className="text-muted-foreground text-sm">
           Aucune mission. Utile pour un TJM différent de celui du client, ou pour une prestation
-          vendue au forfait — un montant unique, sans jours à cocher.
+          vendue au forfait — un montant unique, quel que soit le nombre de jours passés. Une
+          mission créée ici devient sélectionnable dans le calendrier.
         </p>
         <MissionFormDialog clientId={clientId} clientRate={clientRate} />
       </div>
@@ -127,16 +148,31 @@ export function MissionList({
                       }`}
                   {mission.startDate ? ` · dès le ${formatDayMonth(mission.startDate)}` : ""}
                   {mission.endDate ? ` → ${formatDayMonth(mission.endDate)}` : ""}
-                  {!forfait && mission.workDayCount > 0
-                    ? ` · ${mission.workDayCount} jour${mission.workDayCount > 1 ? "s" : ""} coché${mission.workDayCount > 1 ? "s" : ""}`
+                  {mission.workedDays > 0
+                    ? ` · ${mission.workedDays.toLocaleString("fr-FR")} j au calendrier`
+                    : ""}
+                  {/* Sur un forfait, les jours cochés donnent le seul chiffre
+                      qui juge la vente : le TJM réellement obtenu. */}
+                  {forfait && effectiveRate(mission) !== null
+                    ? ` · soit ${formatMoneyShort(effectiveRate(mission) ?? 0)}/j`
                     : ""}
                 </p>
               </div>
 
               {forfait ? (
                 <>
-                  <span className="tabular text-sm font-medium">
-                    {formatMoney(mission.forfaitAmount ?? 0)}
+                  {/* Brut et net côte à côte : c'est le net qu'on cherche
+                      vraiment quand on regarde un forfait (issue #29). */}
+                  <span className="text-right">
+                    <span className="tabular block text-sm font-medium">
+                      {formatMoney(mission.forfaitAmount ?? 0)}
+                    </span>
+                    <span className="text-subtle-foreground block text-xs">
+                      <span className="tabular">
+                        {formatMoney(netFromRevenue(mission.forfaitAmount ?? 0, chargeRate))}
+                      </span>{" "}
+                      net · {formatPercent(chargeRate)}
+                    </span>
                   </span>
                   <Badge
                     variant={

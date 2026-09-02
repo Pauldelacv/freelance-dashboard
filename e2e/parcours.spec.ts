@@ -207,6 +207,53 @@ test.describe("cœur du produit", () => {
     ).toContainText("Encaissé");
   });
 
+  test("pose les jours de travail d'un contrat au forfait", async ({ page }) => {
+    // Issue #29 : un forfait se vend au montant, mais il se travaille bien des
+    // jours donnés. Le calendrier doit donc pouvoir les rattacher à la mission
+    // — sans que ces jours ne créent un second CA à côté du forfait.
+    await page.goto("/clients");
+    await page.getByRole("button", { name: "Nouveau client" }).first().click();
+    await page.getByLabel("Nom").fill("Client Forfait Jours");
+    await page.getByLabel("TJM (€)").fill("500");
+    await page.getByRole("button", { name: "Créer le client" }).click();
+    await page.getByRole("link", { name: /Client Forfait Jours/ }).click();
+
+    await page.getByRole("button", { name: "Nouvelle mission" }).first().click();
+    const formulaire = page.getByRole("dialog");
+    await formulaire.getByLabel("Intitulé").fill("Chantier au forfait");
+    await formulaire.getByRole("button", { name: "Forfait (montant unique)" }).click();
+    await formulaire.getByLabel("Montant du forfait (€)").fill("3000");
+    await formulaire.getByRole("button", { name: "Créer la mission" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // Mars 2027 commence un lundi, et aucun autre parcours n'y touche.
+    await page.goto("/calendrier?m=2027-03");
+    await page.selectOption('select[aria-label="Client actif"]', { label: "Client Forfait Jours" });
+    await page.selectOption('select[aria-label="Mission active"]', { index: 1 });
+
+    await page.locator('[data-date="2027-03-01"]').click();
+    await page.locator('[data-date="2027-03-02"]').click();
+
+    // Deux jours travaillés, et pas un euro de plus : le CA du forfait est
+    // porté par la mission, pas par ses journées.
+    await expect(page.getByTestId("total-days")).toHaveText("2");
+    await expect(page.getByTestId("total-revenue")).toHaveText("0,00 €");
+    await expect(page.locator('[data-date="2027-03-01"]')).toContainText("Chantier au forfait");
+
+    await page.reload();
+    await expect(page.getByTestId("total-days")).toHaveText("2");
+    await expect(page.getByTestId("total-revenue")).toHaveText("0,00 €");
+
+    // La fiche client en tire le TJM réellement obtenu, et le net du forfait.
+    await page.goto("/clients");
+    await page.getByRole("link", { name: /Client Forfait Jours/ }).click();
+    const ligne = page.getByRole("listitem").filter({ hasText: "Chantier au forfait" });
+    await expect(ligne).toContainText("2 j au calendrier");
+    await expect(ligne).toContainText("soit 1 500 €/j");
+    await expect(ligne).toContainText("3 000,00 €");
+    await expect(ligne).toContainText("net");
+  });
+
   test("pointe un encaissement depuis le tableau de bord", async ({ page }) => {
     // Indy ne dit jamais qu'une facture est payée : sans ce geste, « encaissé »
     // reste à zéro. Le pointage doit donc marcher depuis l'écran d'accueil,
@@ -331,6 +378,64 @@ test.describe("cœur du produit", () => {
 
     await page.reload();
     await expect(page.getByText("Objectif 12 345 €")).toBeVisible();
+  });
+
+  test("répartit un objectif annuel et retire les mois décochés", async ({ page }) => {
+    // Issue #30 : les cases de mois repartaient des mois travaillés et non de
+    // la répartition enregistrée — on cochait, on enregistrait, et la boîte
+    // rouvrait sur l'état d'avant. Et l'objectif d'un mois décoché survivait à
+    // la nouvelle répartition, où il continuait de primer.
+    await page.goto("/");
+    await page.getByRole("button", { name: /^(Modifier|en définir un)$/ }).click();
+
+    const boite = page.getByRole("dialog");
+    const cases = boite.locator('input[name="months"]');
+
+    // On repart de zéro : aucun mois coché, puis décembre seul.
+    const coches = await cases.evaluateAll((inputs) =>
+      inputs.map((input) => (input as HTMLInputElement).checked),
+    );
+    for (const [index, coche] of coches.entries()) {
+      if (coche) await boite.locator('label:has(input[name="months"])').nth(index).click();
+    }
+    await boite.locator('label:has(input[name="months"])').nth(11).click();
+
+    await boite.locator("#year-revenue").fill("60000");
+    await boite.getByRole("button", { name: "Enregistrer l'année" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // Le mois en cours n'est plus coché : son objectif propre a disparu, et la
+    // jauge retombe sur la valeur par défaut des réglages.
+    await page.reload();
+    await expect(page.getByText("Objectif 12 345 €")).toHaveCount(0);
+    await expect(page.getByText("Objectif 9 000 €")).toBeVisible();
+
+    // Et la boîte rouvre sur la répartition enregistrée : décembre, seul.
+    await page.getByRole("button", { name: /^(Modifier|en définir un)$/ }).click();
+    await expect(page.getByRole("dialog").locator("#year-revenue")).toHaveValue("60000");
+    const apres = await page
+      .getByRole("dialog")
+      .locator('input[name="months"]')
+      .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).checked));
+    expect(apres).toEqual([...Array(11).fill(false), true]);
+  });
+
+  test("rappelle la déclaration trimestrielle URSSAF jusqu'à ce qu'elle soit faite", async ({
+    page,
+  }) => {
+    // Issue #31 : l'échéance s'affiche dès l'ouverture de la déclaration et ne
+    // part que sur un geste — le dashboard n'a aucun moyen de savoir seul
+    // qu'elle a été envoyée.
+    await page.goto("/");
+    const encadre = page.getByText(/Déclaration URSSAF/);
+    await expect(encadre).toBeVisible();
+
+    await page.getByRole("button", { name: "Déclaration faite" }).click();
+    // De quoi défaire le clic reste à l'écran, comme pour le pointage.
+    await expect(page.getByText(/marquée faite/)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText(/Déclaration URSSAF/)).toHaveCount(0);
   });
 
   test("ajoute un site de veille et le filtre", async ({ page }) => {
